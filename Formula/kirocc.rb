@@ -1,27 +1,28 @@
 class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
-  version "0.9.1"
   license "Apache-2.0"
 
+  # No explicit `version` here: it's redundant with (and audited against) the
+  # version Homebrew scans from the stable URL below, so it's hardcoded per-arch.
   on_macos do
     on_intel do
-      url "https://github.com/d-kuro/kirocc/releases/download/v#{version}/kirocc_#{version}_darwin_amd64.tar.gz"
+      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_darwin_amd64.tar.gz"
       sha256 "bec5ecd043dcf08075900a37ba44c48b3111cc582b75f33c9328b53e098fae43"
     end
     on_arm do
-      url "https://github.com/d-kuro/kirocc/releases/download/v#{version}/kirocc_#{version}_darwin_arm64.tar.gz"
+      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_darwin_arm64.tar.gz"
       sha256 "bd645bca7c08a900e6c36bb3e3d2078f35c1665d19ea2b7b8735c7df1b25e72e"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/d-kuro/kirocc/releases/download/v#{version}/kirocc_#{version}_linux_amd64.tar.gz"
+      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_linux_amd64.tar.gz"
       sha256 "97a36da994256dacfcc7075205321f7fef9e6200a5c650e096a67f229533bb45"
     end
     on_arm do
-      url "https://github.com/d-kuro/kirocc/releases/download/v#{version}/kirocc_#{version}_linux_arm64.tar.gz"
+      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_linux_arm64.tar.gz"
       sha256 "2100af01858426acf422a51c2dc65ba8f16229b67003a9c2961df4233169b2af"
     end
   end

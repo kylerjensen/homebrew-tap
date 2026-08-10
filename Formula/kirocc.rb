@@ -28,6 +28,13 @@ class Kirocc < Formula
 
   def install
     bin.install "kirocc"
+
+    # Upstream releases are only ad-hoc signed (no Developer ID, not notarized),
+    # and Homebrew's downloader quarantines the fetched tarball. Without this,
+    # macOS Gatekeeper blocks first launch with "kirocc could not be verified".
+    if OS.mac?
+      quiet_system "/usr/bin/xattr", "-d", "com.apple.quarantine", bin/"kirocc"
+    end
   end
 
   service do
@@ -54,6 +61,10 @@ class Kirocc < Formula
         By default kirocc listens on 127.0.0.1:3456.
         If you bind to a non-loopback host, set an API key:
           kirocc --api-key '<strong-random-key>'
+
+        Upstream binaries are ad-hoc signed, not notarized by Apple. This
+        formula strips the macOS quarantine flag on install so Gatekeeper
+        doesn't block the first launch.
 
       Credentials:
         Default DB path:

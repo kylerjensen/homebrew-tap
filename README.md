@@ -11,6 +11,7 @@ Or, in a `brew bundle` `Brewfile`:
 ```ruby
 tap "kylerjensen/tap"
 brew "<formula>"
+cask "<cask>"
 ```
 
 ## Documentation

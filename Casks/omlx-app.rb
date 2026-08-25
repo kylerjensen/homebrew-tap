@@ -23,7 +23,6 @@ cask "omlx-app" do
   end
 
   auto_updates true
-  depends_on formula: "jundot/omlx/omlx"
   depends_on macos: :sequoia
   depends_on arch: :arm64
 

@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# OpenAI-format proxy gateway for 100+ LLM APIs
 class Litellm < Formula
   desc "OpenAI-format proxy gateway for 100+ LLM APIs"
   homepage "https://github.com/BerriAI/litellm"
@@ -19,7 +22,7 @@ class Litellm < Formula
   # the platform-specific work. litellm itself stays pinned to this formula's
   # version; its dependencies resolve from PyPI at install time.
   def install
-    python = Formula["python@3.13"].opt_bin/"python3.13"
+    python = formula_opt_bin("python@3.13")/"python3.13"
     system python, "-m", "venv", libexec
     system libexec/"bin/pip", "install",
            "--no-cache-dir", "--disable-pip-version-check",
@@ -81,6 +84,30 @@ class Litellm < Formula
       (change the --host argument via `brew services edit litellm`), set a
       master key first: https://docs.litellm.ai/docs/proxy/virtual_keys
     EOS
+  end
+
+  def doc
+    <<~DOC
+      OpenAI-format proxy gateway for 100+ LLM APIs.
+
+      Configure models in:
+        #{etc}/litellm/config.yaml
+      then restart the service:
+        brew services restart litellm
+
+      Service management:
+        brew services start litellm
+        brew services info litellm
+        brew services stop litellm
+        brew services edit litellm
+
+      Point clients at the proxy, for example:
+        export OPENAI_API_BASE=http://127.0.0.1:4000
+
+      The service binds to loopback only. If you expose it beyond localhost
+      (change the --host argument via `brew services edit litellm`), set a
+      master key first: https://docs.litellm.ai/docs/proxy/virtual_keys
+    DOC
   end
 
   test do

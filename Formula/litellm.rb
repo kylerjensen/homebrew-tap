@@ -30,7 +30,9 @@ class Litellm < Formula
 
     (bin/"litellm").write_env_script libexec/"bin/litellm", PATH: "#{libexec}/bin:$PATH"
 
-    (buildpath/"litellm.yaml").write <<~YAML
+    (etc/"litellm").mkpath
+    config = etc/"litellm/config.yaml"
+    config.write <<~YAML unless config.exist?
       # LiteLLM Proxy server configuration.
       # Docs: https://docs.litellm.ai/docs/proxy/configs
       #
@@ -49,7 +51,6 @@ class Litellm < Formula
       #   brew services edit litellm
       model_list: []
     YAML
-    etc.install "litellm.yaml" => "litellm/config.yaml"
   end
 
   service do

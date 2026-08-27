@@ -13,6 +13,7 @@ class Litellm < Formula
     regex(/^v?(\d+(?:\.\d+)+)$/i)
   end
 
+  depends_on "postgresql@17"
   depends_on "python@3.13"
 
   # Rust/maturin wheels (jiter, pydantic-core, tiktoken, orjson, tokenizers, and
@@ -32,22 +33,29 @@ class Litellm < Formula
   # sources, pip installs the pinned version from PyPI and lets the wheels do
   # the platform-specific work. litellm itself stays pinned to this formula's
   # version; its dependencies resolve from PyPI at install time.
+  # extra_proxy pulls in prisma, which is required for the web admin UI.
   def install
     python = formula_opt_bin("python@3.13")/"python3.13"
     system python, "-m", "venv", libexec
     system libexec/"bin/pip", "install",
            "--no-cache-dir", "--disable-pip-version-check",
-           "litellm[proxy]==#{version}"
+           "litellm[proxy,extra_proxy]==#{version}"
 
     (bin/"litellm").write_env_script libexec/"bin/litellm", PATH: "#{libexec}/bin:$PATH"
 
     (etc/"litellm").mkpath
     config = etc/"litellm/config.yaml"
-    config.write <<~YAML unless config.exist?
+    return if config.exist?
+
+    require "securerandom"
+    master_key = "sk-#{SecureRandom.hex(24)}"
+    (var/"log/litellm-master-key").open("w") { |f| f.write(master_key) }
+    db_url = "postgresql://#{ENV.fetch("USER", nil)}@localhost/litellm"
+    config.write <<~YAML
       # LiteLLM Proxy server configuration.
       # Docs: https://docs.litellm.ai/docs/proxy/configs
       #
-      # Add models below, then restart the service:
+      # Add models below and restart the service:
       #   brew services restart litellm
       #
       # Example:
@@ -57,11 +65,42 @@ class Litellm < Formula
       #         model: openai/gpt-4o
       #         api_key: os.environ/OPENAI_API_KEY
       #
-      # `os.environ/...` references are read from the proxy process
-      # environment. Under `brew services`, add variables with:
-      #   brew services edit litellm
+      # API keys referenced as `os.environ/VAR` are read from the service
+      # process environment. Set them in your shell profile or launchd plist.
+
+      general_settings:
+        master_key: #{master_key}
+        database_url: "#{db_url}"
+
       model_list: []
     YAML
+  end
+
+  def post_install
+    pg_bin = formula_opt_bin("postgresql@17")
+    db_name = "litellm"
+
+    # quiet_system returns a boolean without raising; skip DB setup if
+    # PostgreSQL isn't running. The user can run `brew postinstall litellm`
+    # after starting postgresql@17.
+    return unless quiet_system pg_bin/"pg_isready", "--quiet"
+
+    # createdb exits non-zero if the DB already exists; that is fine.
+    quiet_system pg_bin/"createdb", db_name
+
+    db_url = "postgresql://#{ENV.fetch("USER", nil)}@localhost/#{db_name}"
+
+    # Use litellm_proxy_extras.utils.ProxyExtrasDBManager.setup_database() which
+    # handles the full Prisma toolchain bootstrap (downloads Node.js + Prisma CLI
+    # on first run) and runs prisma db push. The venv bin dir must be on PATH so
+    # the `prisma` CLI entry point is found by the subprocess calls inside it.
+    venv_bin = (libexec/"bin").to_s
+    with_env("DATABASE_URL" => db_url,
+             "PATH"         => "#{venv_bin}:#{ENV.fetch("PATH", nil)}") do
+      system libexec/"bin/python3", "-c",
+             "from litellm_proxy_extras.utils import ProxyExtrasDBManager; " \
+             "ProxyExtrasDBManager.setup_database()"
+    end
   end
 
   service do
@@ -71,13 +110,19 @@ class Litellm < Formula
     log_path var/"log/litellm.log"
     error_log_path var/"log/litellm.log"
     working_dir Dir.home
+    environment_variables DATABASE_URL: "postgresql://#{ENV.fetch("USER", nil)}@localhost/litellm"
   end
 
   def caveats
+    master_key = (var/"log/litellm-master-key").exist? ? (var/"log/litellm-master-key").read.strip : nil
     <<~EOS
-      The LiteLLM Proxy service listens on http://127.0.0.1:4000 and serves an
-      OpenAI-compatible API (Swagger UI at the same address).
+      The LiteLLM Proxy listens on http://127.0.0.1:4000 and provides an
+      OpenAI-compatible REST API and web UI.
 
+      Start PostgreSQL before starting the proxy:
+        brew services start postgresql@17
+        brew services start litellm
+      #{"\n      Master key (sign in to the web UI and use as your API Bearer token):\n        #{master_key}\n" if master_key}
       Configure models in:
         #{etc}/litellm/config.yaml
       then restart the service:
@@ -87,14 +132,10 @@ class Litellm < Formula
         brew services start litellm
         brew services info litellm
         brew services stop litellm
-        brew services edit litellm
 
       Point clients at the proxy, for example:
         export OPENAI_API_BASE=http://127.0.0.1:4000
-
-      The service binds to loopback only. If you expose it beyond localhost
-      (change the --host argument via `brew services edit litellm`), set a
-      master key first: https://docs.litellm.ai/docs/proxy/virtual_keys
+        export OPENAI_API_KEY=#{master_key || "<master_key>"}
     EOS
   end
 
@@ -111,14 +152,9 @@ class Litellm < Formula
         brew services start litellm
         brew services info litellm
         brew services stop litellm
-        brew services edit litellm
 
       Point clients at the proxy, for example:
         export OPENAI_API_BASE=http://127.0.0.1:4000
-
-      The service binds to loopback only. If you expose it beyond localhost
-      (change the --host argument via `brew services edit litellm`), set a
-      master key first: https://docs.litellm.ai/docs/proxy/virtual_keys
     DOC
   end
 

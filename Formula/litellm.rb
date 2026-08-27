@@ -43,11 +43,16 @@ class Litellm < Formula
 
     (etc/"litellm").mkpath
     config = etc/"litellm/config.yaml"
-    config.write <<~YAML unless config.exist?
+    return if config.exist?
+
+    require "securerandom"
+    master_key = "sk-#{SecureRandom.hex(24)}"
+    (var/"log/litellm-master-key").open("w") { |f| f.write(master_key) }
+    config.write <<~YAML
       # LiteLLM Proxy server configuration.
       # Docs: https://docs.litellm.ai/docs/proxy/configs
       #
-      # Add models below, then restart the service:
+      # Add models below and restart the service:
       #   brew services restart litellm
       #
       # Example:
@@ -57,9 +62,12 @@ class Litellm < Formula
       #         model: openai/gpt-4o
       #         api_key: os.environ/OPENAI_API_KEY
       #
-      # `os.environ/...` references are read from the proxy process
-      # environment. Under `brew services`, add variables with:
-      #   brew services edit litellm
+      # API keys referenced as `os.environ/VAR` are read from the service
+      # process environment. Set them in your shell profile or launchd plist.
+
+      general_settings:
+        master_key: #{master_key}
+
       model_list: []
     YAML
   end
@@ -74,10 +82,11 @@ class Litellm < Formula
   end
 
   def caveats
+    master_key = (var/"log/litellm-master-key").exist? ? (var/"log/litellm-master-key").read.strip : nil
     <<~EOS
       The LiteLLM Proxy service listens on http://127.0.0.1:4000 and serves an
       OpenAI-compatible API (Swagger UI at the same address).
-
+      #{"\n      Master key (required to sign in to the UI and create API keys):\n        #{master_key}\n" if master_key}
       Configure models in:
         #{etc}/litellm/config.yaml
       then restart the service:
@@ -87,14 +96,12 @@ class Litellm < Formula
         brew services start litellm
         brew services info litellm
         brew services stop litellm
-        brew services edit litellm
 
       Point clients at the proxy, for example:
         export OPENAI_API_BASE=http://127.0.0.1:4000
 
-      The service binds to loopback only. If you expose it beyond localhost
-      (change the --host argument via `brew services edit litellm`), set a
-      master key first: https://docs.litellm.ai/docs/proxy/virtual_keys
+      The service binds to loopback only. To expose it beyond localhost, change
+      --host in the service plist and update master_key in your config first.
     EOS
   end
 
@@ -111,14 +118,9 @@ class Litellm < Formula
         brew services start litellm
         brew services info litellm
         brew services stop litellm
-        brew services edit litellm
 
       Point clients at the proxy, for example:
         export OPENAI_API_BASE=http://127.0.0.1:4000
-
-      The service binds to loopback only. If you expose it beyond localhost
-      (change the --host argument via `brew services edit litellm`), set a
-      master key first: https://docs.litellm.ai/docs/proxy/virtual_keys
     DOC
   end
 

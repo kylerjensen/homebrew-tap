@@ -95,7 +95,7 @@ class Litellm < Formula
     # the `prisma` CLI entry point is found by the subprocess calls inside it.
     venv_bin = (libexec/"bin").to_s
     with_env("DATABASE_URL" => db_url,
-             "PATH" => "#{venv_bin}:#{ENV.fetch("PATH", nil)}") do
+             "PATH"         => "#{venv_bin}:#{ENV.fetch("PATH", nil)}") do
       system libexec/"bin/python3", "-c",
              "from litellm_proxy_extras.utils import ProxyExtrasDBManager; " \
              "ProxyExtrasDBManager.setup_database()"

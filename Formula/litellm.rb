@@ -84,9 +84,14 @@ class Litellm < Formula
   def caveats
     master_key = (var/"log/litellm-master-key").exist? ? (var/"log/litellm-master-key").read.strip : nil
     <<~EOS
-      The LiteLLM Proxy service listens on http://127.0.0.1:4000 and serves an
-      OpenAI-compatible API (Swagger UI at the same address).
-      #{"\n      Master key (required to sign in to the UI and create API keys):\n        #{master_key}\n" if master_key}
+      The LiteLLM Proxy listens on http://127.0.0.1:4000 and provides an
+      OpenAI-compatible REST API.
+      #{"\n      Master key (use as your API key for all requests):\n        #{master_key}\n" if master_key}
+      The web UI at http://127.0.0.1:4000 requires a database (Prisma) to
+      function. Without one, use the API directly:
+        curl http://127.0.0.1:4000/v1/models \\
+          -H "Authorization: Bearer #{master_key || "<master_key>"}"
+
       Configure models in:
         #{etc}/litellm/config.yaml
       then restart the service:
@@ -99,9 +104,7 @@ class Litellm < Formula
 
       Point clients at the proxy, for example:
         export OPENAI_API_BASE=http://127.0.0.1:4000
-
-      The service binds to loopback only. To expose it beyond localhost, change
-      --host in the service plist and update master_key in your config first.
+        export OPENAI_API_KEY=#{master_key || "<master_key>"}
     EOS
   end
 

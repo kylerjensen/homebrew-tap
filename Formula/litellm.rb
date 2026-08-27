@@ -80,12 +80,13 @@ class Litellm < Formula
     pg_bin = formula_opt_bin("postgresql@17")
     db_name = "litellm"
 
-    # Skip DB setup if PostgreSQL isn't running yet; the user can run
-    # `brew postinstall litellm` after starting postgresql@17.
-    return unless system pg_bin/"pg_isready", "--quiet"
+    # quiet_system returns a boolean without raising; skip DB setup if
+    # PostgreSQL isn't running. The user can run `brew postinstall litellm`
+    # after starting postgresql@17.
+    return unless quiet_system pg_bin/"pg_isready", "--quiet"
 
-    # createdb exits non-zero if the DB already exists; ignore that error.
-    system pg_bin/"createdb", db_name
+    # createdb exits non-zero if the DB already exists; that is fine.
+    quiet_system pg_bin/"createdb", db_name
 
     db_url = "postgresql://#{ENV.fetch("USER", nil)}@localhost/#{db_name}"
 

@@ -15,6 +15,17 @@ class Litellm < Formula
 
   depends_on "python@3.13"
 
+  # Rust/maturin wheels (jiter, pydantic-core, tiktoken, orjson, tokenizers, and
+  # litellm's own rust_bridge) ship with linker-signed adhoc Mach-O binaries
+  # that have no header padding. Homebrew's post-install relocation step tries to
+  # rewrite their @rpath install names to absolute paths, but the header is full
+  # so it falls back to a manual adhoc resign — which breaks the linker-signed
+  # flag that macOS requires and causes SIGKILL (Code Signature Invalid) on load.
+  # preserve_rpath tells Homebrew to skip rewriting @rpath IDs entirely, leaving
+  # the original linker signatures intact. Python's dlopen loads .so files by
+  # filesystem path so the @rpath ID is irrelevant at runtime.
+  preserve_rpath
+
   # The sdist builds with maturin and needs a Rust toolchain, but PyPI ships
   # prebuilt cp310-abi3 wheels for macOS (x86_64/arm64) and Linux
   # (manylinux/musllinux, x86_64/aarch64). So instead of building the staged

@@ -14,6 +14,12 @@ class HeadroomAi < Formula
     SCRIPT
   end
 
+  def uninstall
+    python = Formula["python@3.13"].opt_bin/"python3"
+    system python, "-m", "pip", "uninstall", "headroom-ai", "-y",
+           "--target", libexec/"lib/python3.13/site-packages"
+  end
+
   test do
     assert_match version.to_s, shell_output("#{bin}/headroom --version")
     assert_match "Usage:", shell_output("#{bin}/headroom --help")

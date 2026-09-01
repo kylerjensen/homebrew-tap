@@ -20,6 +20,13 @@ class HeadroomAi < Formula
            "--target", libexec/"lib/python3.13/site-packages"
   end
 
+  service do
+    run [opt_bin/"headroom", "proxy", "--port", "8787"]
+    keep_alive true
+    log_path var/"log/headroom-proxy.log"
+    error_log_path var/"log/headroom-proxy.log"
+  end
+
   test do
     assert_match version.to_s, shell_output("#{bin}/headroom --version")
     assert_match "Usage:", shell_output("#{bin}/headroom --help")

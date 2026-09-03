@@ -13,7 +13,7 @@ class HeadroomAi < Formula
   # :all:`, which would try to compile all of that from source, so we drive
   # a plain venv + pip ourselves to install from the published wheels.
   def install
-    system Formula["python@3.13"].opt_bin/"python3.13", "-m", "venv", libexec
+    system formula_opt_bin("python@3.13")/"python3.13", "-m", "venv", libexec
     system libexec/"bin/pip", "install", "--upgrade", "pip"
     system libexec/"bin/pip", "install", "headroom-ai[all]==#{version}"
     bin.install_symlink libexec/"bin/headroom"

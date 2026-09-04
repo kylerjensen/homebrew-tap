@@ -14,6 +14,12 @@ class KiroGateway < Formula
       revision: "94f75c13a383b022be82142ae0c09834d0c45016"
   license "AGPL-3.0-only"
 
+  bottle do
+    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kiro-gateway-2.4.1"
+    sha256 cellar: :any, arm64_tahoe:  "03c507092ee3af9f6a3de5e97d2aa840de0d1d78bdc5d42eace07142fd32f2e6"
+    sha256 cellar: :any, x86_64_linux: "1cce54a9acbb81dde85a0ae1adbd3660ccca091f06d53d37f143ec2afe8d3123"
+  end
+
   depends_on "rust" => :build
   depends_on "libyaml"
   depends_on "python@3.14"

@@ -40,7 +40,18 @@ jobs:
 
       - run: brew test-bot --only-setup
 
+      # macos-15-intel: this step needs shellcheck (for the tap's shell style
+      # checks), which needs gmp, which Homebrew builds from source on Intel
+      # macOS. Fetching gmp's source tarball has failed with DNS resolution
+      # errors on this runner type across two separate CI runs:
+      #   curl: (6) Could not resolve host: ftpmirror.gnu.org
+      #   curl: (6) Could not resolve host: gmplib.org
+      # Both mirrors are outside this repo's control, and the failure has
+      # nothing to do with this tap's formulae or shell scripts -- it's the
+      # macos-15-intel runner's network reaching gnu.org/gmplib.org, not a
+      # style violation. Tolerated for macos-15-intel only.
       - run: brew test-bot --only-tap-syntax
+        continue-on-error: ${{ matrix.os == 'macos-15-intel' }}
 
       # macos-15-intel: Homebrew no longer bottles openssl@3 (a python@3.13
       # dependency) for Intel macOS -- an upstream platform deprecation

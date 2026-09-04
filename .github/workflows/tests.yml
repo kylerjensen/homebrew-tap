@@ -49,17 +49,8 @@ jobs:
 
       - run: brew test-bot --only-tap-syntax
 
-      # ubuntu-latest: `brew linkage --test` reports libtorch.so/libc10.so as
-      # missing even though they exist and import fine -- confirmed via a
-      # minimal test formula that does nothing but `pip install torch`, so
-      # it's PyTorch's own manylinux wheel layout tripping up Homebrew's
-      # linkage checker, not headroom-ai's code. There's no per-library
-      # opt-out available from a tap (Homebrew's own allowlist for this is
-      # hardcoded to specific formula names in Homebrew/brew itself), so the
-      # whole step is tolerated on this one platform only.
       - run: brew test-bot --only-formulae
         if: github.event_name == 'pull_request'
-        continue-on-error: ${{ matrix.os == 'ubuntu-latest' }}
 
       - name: Upload bottles as artifact
         if: always() && github.event_name == 'pull_request'

@@ -11,7 +11,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-15-intel, macos-26 ]
+        # macos-15-intel dropped from the matrix: its runners have repeatedly
+        # failed CI for reasons external to this tap's formulae -- most
+        # recently, reproducible DNS resolution failures (Could not resolve
+        # host: ftpmirror.gnu.org / gmplib.org) fetching shellcheck's gmp
+        # dependency during only-tap-syntax, and previously, Homebrew no
+        # longer bottling openssl@3 for Intel macOS. Not worth carving out
+        # exceptions for a runner type that keeps finding new ways to fail.
+        os: [ macos-26 ]
         include:
           - os: ubuntu-latest
             container: ghcr.io/homebrew/brew:main
@@ -42,11 +49,6 @@ jobs:
 
       - run: brew test-bot --only-tap-syntax
 
-      # macos-15-intel: Homebrew no longer bottles openssl@3 (a python@3.13
-      # dependency) for Intel macOS -- an upstream platform deprecation
-      # (Homebrew's own install output: "we do not provide support for this
-      # platform"), not something a formula can fix.
-      #
       # ubuntu-latest: `brew linkage --test` reports libtorch.so/libc10.so as
       # missing even though they exist and import fine -- confirmed via a
       # minimal test formula that does nothing but `pip install torch`, so
@@ -57,7 +59,7 @@ jobs:
       # whole step is tolerated on this one platform only.
       - run: brew test-bot --only-formulae
         if: github.event_name == 'pull_request'
-        continue-on-error: ${{ matrix.os == 'macos-15-intel' || matrix.os == 'ubuntu-latest' }}
+        continue-on-error: ${{ matrix.os == 'ubuntu-latest' }}
 
       - name: Upload bottles as artifact
         if: always() && github.event_name == 'pull_request'

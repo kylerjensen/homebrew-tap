@@ -1,8 +1,13 @@
 class KiroGateway < Formula
   desc "Proxy gateway exposing Kiro's models over OpenAI/Anthropic-compatible APIs"
-  homepage "https://github.com/jwadow/kiro-gateway"
-  url "https://github.com/jwadow/kiro-gateway/archive/refs/tags/v2.3.tar.gz"
-  sha256 "dfe6d99001d98cdb3c06e419e5c4f076183ee12e0132386a09a2b92ccbd5876d"
+  homepage "https://github.com/kylerjensen/kiro-gateway"
+  # Tracks kylerjensen/kiro-gateway's main branch (a fork of jwadow/kiro-gateway)
+  # rather than upstream's latest tag, since fixes we need land on main ahead
+  # of upstream's next tagged release. Pinned to a commit SHA rather than
+  # `refs/heads/main` so the tarball -- and its sha256 -- stay reproducible.
+  url "https://github.com/kylerjensen/kiro-gateway/archive/5c570b30ba37201bc86220a6713d0923703ab1e5.tar.gz"
+  version "2.3-5c570b3"
+  sha256 "d84b6417034aa07e6b263cd755a2f29af64ad08247651acab4a2d0fbd3d2f0db"
   license "AGPL-3.0-or-later"
 
   depends_on "python@3.14"

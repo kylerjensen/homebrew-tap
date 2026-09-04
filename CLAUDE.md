@@ -26,6 +26,10 @@ CI (`.github/workflows/tests.yml`) runs on every PR and push to `main` via `brew
 
 Merges to `main` happen via `brew pr-pull` (`.github/workflows/publish.yml`), triggered by adding the `pr-pull` label to a PR — this pulls built bottles and pushes the commit, then deletes the PR branch. Don't push formula bottle commits to `main` directly; let the label-triggered workflow do it.
 
+Only label PRs that change a `Formula/*.rb` or `Casks/*.rb` file. `pr-pull`'s value is pulling the bottle `test-bot` built during CI and committing it into the formula with proper checksums — for docs-only/config-only PRs there's no bottle to pull, so it's a no-op wrapped in an extra CI round-trip; use a normal merge for those instead.
+
+`pr-pull` always makes the PR show as **closed**, never **merged**, on GitHub — this is expected, not a bug. It pushes the bottle commit straight to `main` via git rather than going through GitHub's merge API, so GitHub has no merge event to record. There's no ordering trick to get both (e.g. merging first, then labeling) — `pr-pull` needs the PR still open to read its CI bottle artifacts and pull its branch; once merged/closed, there's nothing left to pull. The bottle commit *is* the merge. Treat `git log origin/main` as the source of truth for whether a `pr-pull`'d PR landed, not the GitHub PR state badge.
+
 ## Architecture / conventions
 
 Each formula documents *why*, not *what*, in comments — non-obvious constraints (sandbox limits, linking quirks, upstream packaging gaps) are explained inline because the reasoning isn't derivable from reading the DSL alone. Follow this pattern for new formulae/casks: comment the reasoning behind workarounds, not the mechanics of the DSL calls themselves.

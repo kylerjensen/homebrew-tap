@@ -205,18 +205,55 @@ class KiroGateway < Formula
       # (ships as literal "change-me"), so generate a random secret rather
       # than leaving it guessable.
       require "securerandom"
+
+      # Bake kiro-cli's absolute path into KIRO_CLI_PATH at install time.
+      # Otherwise the gateway resolves "kiro-cli" via $PATH at service start,
+      # but `brew services` runs under launchd with a minimal PATH
+      # (/usr/bin:/bin:/usr/sbin:/sbin) that won't include the user's shell
+      # PATH or the cask's app bundle -- the lookup fails with FileNotFoundError
+      # and the service crash-loops. Prefer the resolved absolute path so the
+      # generated line works uncommented under launchd; fall back to the
+      # commented "kiro-cli" placeholder only when we can't find it.
+      kiro_cli = detect_kiro_cli
+      kiro_cli_line =
+        if kiro_cli
+          "KIRO_CLI_PATH=#{kiro_cli}"
+        else
+          # KIRO_CLI_PATH defaults to "kiro-cli" resolved via $PATH. Set this to
+          # an absolute path if kiro-cli isn't on PATH for services started by
+          # launchd (see caveats).
+          "#KIRO_CLI_PATH=kiro-cli"
+        end
+
       env_file.write <<~EOS
         SERVER_HOST=127.0.0.1
         SERVER_PORT=8000
         KIRO_GATEWAY_API_KEY=#{SecureRandom.hex(32)}
 
-        # KIRO_CLI_PATH defaults to "kiro-cli" resolved via $PATH. Set this to
-        # an absolute path if kiro-cli isn't on PATH for services started by
-        # launchd (see caveats).
-        #KIRO_CLI_PATH=kiro-cli
+        #{kiro_cli_line}
       EOS
     end
     ln_sf env_file, libexec/".env"
+  end
+
+  # Resolve kiro-cli to an absolute path for KIRO_CLI_PATH, preferring a
+  # location that stays valid under launchd's minimal PATH. Returns nil if
+  # kiro-cli can't be located, in which case the .env line stays commented.
+  def detect_kiro_cli
+    # The kiro-cli cask installs a "Kiro CLI.app" bundle on macOS; its
+    # in-bundle binary is the stable absolute target (Homebrew's bin symlink
+    # points here). Prefer it so the path survives even if the symlink dir
+    # isn't on launchd's PATH.
+    if OS.mac?
+      app_binary = Pathname.new("/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli")
+      return app_binary.to_s if app_binary.exist?
+    end
+
+    # Otherwise resolve whatever "kiro-cli" is on PATH to its real absolute
+    # path (following symlinks so the recorded value doesn't depend on a
+    # symlink dir being on launchd's PATH).
+    found = which("kiro-cli")
+    found&.realpath&.to_s
   end
 
   service do
@@ -243,9 +280,10 @@ class KiroGateway < Formula
       bearer/x-api-key. Find it with:
         grep KIRO_GATEWAY_API_KEY #{var}/kiro-gateway/.env
 
-      By default the gateway looks for "kiro-cli" on $PATH. brew services
-      runs under launchd with a minimal PATH, so if `kiro-cli` isn't on it,
-      set KIRO_CLI_PATH in the .env above to kiro-cli's absolute path, e.g.:
+      By default kiro-gateway's KIRO_CLI_PATH in the .env above is set to the
+      absolute path of kiro-cli detected at install time, so `brew services`
+      works under launchd's minimal PATH. If you install kiro-cli after this
+      formula, or it moves, set KIRO_CLI_PATH to its absolute path, e.g.:
         KIRO_CLI_PATH="/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli"
 
       See upstream's README for the full list of tunable options (MCP,

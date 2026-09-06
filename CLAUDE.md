@@ -37,7 +37,7 @@ Each formula documents *why*, not *what*, in comments — non-obvious constraint
 Recurring patterns across formulae in this tap:
 
 - **Ad-hoc-signed/unnotarized upstream binaries** (e.g. [kirocc.rb](Formula/kirocc.rb)): strip the quarantine xattr in `install` so Gatekeeper doesn't block first launch, since Homebrew's downloader quarantines fetched tarballs.
-- **No native packaging from upstream** (e.g. [kiro-gateway.rb](Formula/kiro-gateway.rb)): vendor source into `libexec`, create a private venv/dependency install, and write a wrapper launcher script into `bin` rather than relying on Python::Virtualenv or similar helpers that assume a `pyproject.toml`/`setup.py`.
+- **No native packaging from upstream** (e.g. [ankitcharolia-kiro-gateway.rb](Formula/ankitcharolia-kiro-gateway.rb)): vendor source into `libexec`, create a private venv/dependency install, and write a wrapper launcher script into `bin` rather than relying on Python::Virtualenv or similar helpers that assume a `pyproject.toml`/`setup.py`.
 - **Runtime credential/config auto-detection**: formulae that need to discover user credentials at *service start time* (not install time) do so from the launcher script itself, because Homebrew's build sandbox denies filesystem reads outside a fixed allowlist during `install`/`post_install` — see the kiro-gateway launcher script and its `post_install` `.env` handling.
 - **Pinning fork commits over tags**: when tracking a fork's `main` branch instead of upstream's tagged releases (because needed fixes land ahead of upstream tags), pin the `url` to a specific commit SHA (not `refs/heads/main`) so the tarball and its `sha256` stay reproducible.
 - **`service do` blocks**: formulae exposing a long-running process define a `brew services`-compatible service block (`run`, `keep_alive`, `log_path`/`error_log_path`, `working_dir`) rather than expecting users to run the binary manually.
@@ -47,7 +47,7 @@ Recurring patterns across formulae in this tap:
 ## Formula/cask index
 
 - [Formula/kirocc.rb](Formula/kirocc.rb) — Anthropic Messages API proxy to the Kiro backend; prebuilt multi-arch/multi-OS binary releases.
-- [Formula/kiro-gateway.rb](Formula/kiro-gateway.rb) — OpenAI/Anthropic-compatible proxy gateway for Kiro; vendored Python source + private venv, tracks a fork's `main` via pinned commit SHA.
+- [Formula/ankitcharolia-kiro-gateway.rb](Formula/ankitcharolia-kiro-gateway.rb) — OpenAI/Anthropic-compatible proxy gateway for Kiro; vendored Python source + private venv, tracks a fork's `main` via pinned commit SHA.
 - [Formula/icloud-sync.rb](Formula/icloud-sync.rb) — symlinks `$HOME` directories into iCloud Drive; macOS-only, wraps a pre-bundled Node ESM script.
 - [Casks/omlx-app.rb](Casks/omlx-app.rb) — menu bar app cask for the oMLX LLM inference server; per-OS-version download variants, arm64-only.
 

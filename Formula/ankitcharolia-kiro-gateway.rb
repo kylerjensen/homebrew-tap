@@ -1,4 +1,4 @@
-class KiroGateway < Formula
+class AnkitcharoliaKiroGateway < Formula
   include Language::Python::Virtualenv
 
   desc "OpenAI/Anthropic-compatible API gateway that bridges to kiro-cli over ACP"
@@ -13,13 +13,6 @@ class KiroGateway < Formula
       tag:      "v2.4.1",
       revision: "94f75c13a383b022be82142ae0c09834d0c45016"
   license "AGPL-3.0-only"
-
-  bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kiro-gateway-2.4.1"
-    rebuild 1
-    sha256 cellar: :any, arm64_tahoe:  "e12f6795155a4b5089b9c91aeea159ccc31bb5003bdea44bbd6254b868e8191e"
-    sha256 cellar: :any, x86_64_linux: "4b02e1f1be619f6b5b77daabc3fa8947c6e5fff6a13ac32574bee1d2221bee22"
-  end
 
   depends_on "rust" => :build
   depends_on "libyaml"
@@ -184,9 +177,11 @@ class KiroGateway < Formula
     # virtualenv_install_with_resources already symlinked the venv's raw
     # "kiro-gateway" console script (kiro.cli:main) into bin -- replace it
     # with a wrapper that runs main.py directly instead, since the console
-    # script's `serve` subcommand can't import "main" (see above).
-    (bin/"kiro-gateway").unlink
-    (bin/"kiro-gateway").write <<~EOS
+    # script's `serve` subcommand can't import "main" (see above). Name the
+    # wrapper after the formula so `brew services` and the service block agree.
+    (bin/"ankitcharolia-kiro-gateway").unlink if (bin/"ankitcharolia-kiro-gateway").exist?
+    (bin/"kiro-gateway").unlink if (bin/"kiro-gateway").exist?
+    (bin/"ankitcharolia-kiro-gateway").write <<~EOS
       #!/bin/bash
       # main.py must be importable by module name (see the comment in
       # `install` above), so run from libexec rather than "exec"ing the venv's
@@ -198,8 +193,8 @@ class KiroGateway < Formula
   end
 
   def post_install
-    (var/"kiro-gateway").mkpath
-    env_file = var/"kiro-gateway/.env"
+    (var/"ankitcharolia-kiro-gateway").mkpath
+    env_file = var/"ankitcharolia-kiro-gateway/.env"
     unless env_file.exist?
       # Homebrew installs are single-user, single-machine, so this binds to
       # loopback only. KIRO_GATEWAY_API_KEY has no safe default upstream
@@ -258,28 +253,28 @@ class KiroGateway < Formula
   end
 
   service do
-    run [opt_bin/"kiro-gateway"]
+    run [opt_bin/"ankitcharolia-kiro-gateway"]
     keep_alive true
-    working_dir var/"kiro-gateway"
-    log_path var/"log/kiro-gateway.log"
-    error_log_path var/"log/kiro-gateway.log"
+    working_dir var/"ankitcharolia-kiro-gateway"
+    log_path var/"log/ankitcharolia-kiro-gateway.log"
+    error_log_path var/"log/ankitcharolia-kiro-gateway.log"
   end
 
   def caveats
     <<~EOS
-      kiro-gateway v2.4.1 (ankitcharolia/kiro-gateway) is an ACP bridge, not a
-      credential proxy: it never reads or stores Kiro credentials itself.
-      Instead it shells out to the official kiro-cli binary, so you need:
+      ankitcharolia-kiro-gateway v2.4.1 (ankitcharolia/kiro-gateway) is an ACP
+      bridge, not a credential proxy: it never reads or stores Kiro credentials
+      itself. Instead it shells out to the official kiro-cli binary, so you need:
 
         1. kiro-cli installed (it's a cask, not a formula in this tap):
              brew install --cask kiro-cli
         2. Authenticated once, out of band:
              kiro-cli login
 
-      #{var}/kiro-gateway/.env binds to 127.0.0.1 only and has a randomly
-      generated KIRO_GATEWAY_API_KEY -- clients must send this as their
+      #{var}/ankitcharolia-kiro-gateway/.env binds to 127.0.0.1 only and has a
+      randomly generated KIRO_GATEWAY_API_KEY -- clients must send this as their
       bearer/x-api-key. Find it with:
-        grep KIRO_GATEWAY_API_KEY #{var}/kiro-gateway/.env
+        grep KIRO_GATEWAY_API_KEY #{var}/ankitcharolia-kiro-gateway/.env
 
       By default kiro-gateway's KIRO_CLI_PATH in the .env above is set to the
       absolute path of kiro-cli detected at install time, so `brew services`
@@ -292,9 +287,9 @@ class KiroGateway < Formula
         https://github.com/ankitcharolia/kiro-gateway#configuration
 
       Homebrew service:
-        brew services start kiro-gateway
-        brew services info kiro-gateway
-        brew services stop kiro-gateway
+        brew services start ankitcharolia-kiro-gateway
+        brew services info ankitcharolia-kiro-gateway
+        brew services stop ankitcharolia-kiro-gateway
     EOS
   end
 
@@ -303,6 +298,6 @@ class KiroGateway < Formula
     # entirely inside kiro-cli), so the only environment-independent thing to
     # assert is that the interpreter, venv, and vendored `kiro` package all
     # wired up correctly and agree on the version derived from the git tag.
-    assert_match version.to_s, shell_output("#{bin}/kiro-gateway --version 2>&1")
+    assert_match version.to_s, shell_output("#{bin}/ankitcharolia-kiro-gateway --version 2>&1")
   end
 end

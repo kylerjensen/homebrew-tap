@@ -16,8 +16,9 @@ class KiroGateway < Formula
 
   bottle do
     root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kiro-gateway-2.4.1"
-    sha256 cellar: :any, arm64_tahoe:  "03c507092ee3af9f6a3de5e97d2aa840de0d1d78bdc5d42eace07142fd32f2e6"
-    sha256 cellar: :any, x86_64_linux: "1cce54a9acbb81dde85a0ae1adbd3660ccca091f06d53d37f143ec2afe8d3123"
+    rebuild 1
+    sha256 cellar: :any, arm64_tahoe:  "e12f6795155a4b5089b9c91aeea159ccc31bb5003bdea44bbd6254b868e8191e"
+    sha256 cellar: :any, x86_64_linux: "4b02e1f1be619f6b5b77daabc3fa8947c6e5fff6a13ac32574bee1d2221bee22"
   end
 
   depends_on "rust" => :build

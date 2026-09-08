@@ -48,6 +48,7 @@ Recurring patterns across formulae in this tap:
 
 - [Formula/kirocc.rb](Formula/kirocc.rb) — Anthropic Messages API proxy to the Kiro backend; prebuilt multi-arch/multi-OS binary releases.
 - [Formula/ankitcharolia-kiro-gateway.rb](Formula/ankitcharolia-kiro-gateway.rb) — OpenAI/Anthropic-compatible proxy gateway for Kiro; vendored Python source + private venv, tracks a fork's `main` via pinned commit SHA.
+- [Formula/kiro-gateway.rb](Formula/kiro-gateway.rb) — OpenAI/Anthropic-compatible proxy gateway for Kiro (kylerjensen fork); vendored Python source + private venv, tracks fork's `main` via pinned commit SHA, `brew services`-compatible.
 - [Formula/icloud-sync.rb](Formula/icloud-sync.rb) — symlinks `$HOME` directories into iCloud Drive; macOS-only, wraps a pre-bundled Node ESM script.
 - [Casks/omlx-app.rb](Casks/omlx-app.rb) — menu bar app cask for the oMLX LLM inference server; per-OS-version download variants, arm64-only.
 

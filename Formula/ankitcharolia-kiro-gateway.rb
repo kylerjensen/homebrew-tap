@@ -207,6 +207,17 @@ class AnkitcharoliaKiroGateway < Formula
       # creates the venv at libexec itself (not libexec/venv).
       set -e
 
+      # --version/--help just print and exit; they need neither .env nor a
+      # writable var/. Short-circuit before any provisioning so they work in
+      # read-only contexts (e.g. Homebrew's `test do` sandbox denies writes to
+      # var/, which would otherwise make `mkdir`/`.env` creation fail here).
+      case "$1" in
+        --version|-V|--help|-h)
+          cd "#{libexec}" || exit 1
+          exec "#{libexec}/bin/python3" main.py "$@"
+          ;;
+      esac
+
       env_dir="#{var}/ankitcharolia-kiro-gateway"
       env_file="$env_dir/.env"
       mkdir -p "$env_dir"

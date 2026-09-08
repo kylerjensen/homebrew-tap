@@ -14,6 +14,12 @@ class AnkitcharoliaKiroGateway < Formula
       revision: "94f75c13a383b022be82142ae0c09834d0c45016"
   license "AGPL-3.0-only"
 
+  bottle do
+    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/ankitcharolia-kiro-gateway-2.4.1"
+    sha256 cellar: :any, arm64_tahoe:  "7060e35d6a8171ff762ba612f0dad8cdcb98518b8599a98f17b8ab2e6ece0dd5"
+    sha256 cellar: :any, x86_64_linux: "a0e1aeb5b7804df97f377ec579a4de75de9cbbfaf0c5ed2a142b9a1bd7f80c3a"
+  end
+
   depends_on "rust" => :build
   depends_on "libyaml"
   depends_on "python@3.14"

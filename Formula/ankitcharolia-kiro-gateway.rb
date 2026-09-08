@@ -174,6 +174,12 @@ class AnkitcharoliaKiroGateway < Formula
     # with libexec as its working directory.
     libexec.install "main.py"
 
+    # brew services points launchd's working_dir at var/<name> (see the
+    # service block), and launchd won't spawn if that dir is missing. Create
+    # it at install time -- it's under Homebrew's own prefix, which the build
+    # sandbox permits (unlike the user paths the launcher reads at start time).
+    (var/"ankitcharolia-kiro-gateway").mkpath
+
     # virtualenv_install_with_resources already symlinked the venv's raw
     # "kiro-gateway" console script (kiro.cli:main) into bin -- replace it
     # with a wrapper that runs main.py directly instead, since the console
@@ -181,83 +187,73 @@ class AnkitcharoliaKiroGateway < Formula
     # wrapper after the formula so `brew services` and the service block agree.
     (bin/"ankitcharolia-kiro-gateway").unlink if (bin/"ankitcharolia-kiro-gateway").exist?
     (bin/"kiro-gateway").unlink if (bin/"kiro-gateway").exist?
+
+    # The launcher generates var/<name>/.env on first run rather than in a
+    # `post_install` hook. Homebrew deprecated user-named `post_install` in
+    # favor of the built-in `post_install_steps`, but that name is invoked at
+    # `brew readall`/audit (syntax-check) time -- its body would run when
+    # neither `var` nor `libexec/.env` exist yet and `ln_sf` would raise. And
+    # RuboCop disable directives are themselves banned by `brew style`
+    # (Style/DisableCopsWithinSourceCodeDirective), so the cop can't be
+    # silenced inline. Doing this setup at service-start time sidesteps both
+    # and matches this tap's runtime-credential-detection pattern: the build
+    # sandbox can't read user paths at install time anyway, and detecting
+    # kiro-cli at start time also picks it up if installed after this formula.
     (bin/"ankitcharolia-kiro-gateway").write <<~EOS
       #!/bin/bash
       # main.py must be importable by module name (see the comment in
       # `install` above), so run from libexec rather than "exec"ing the venv's
       # installed console script directly. virtualenv_install_with_resources
       # creates the venv at libexec itself (not libexec/venv).
+      set -e
+
+      env_dir="#{var}/ankitcharolia-kiro-gateway"
+      env_file="$env_dir/.env"
+      mkdir -p "$env_dir"
+
+      if [ ! -f "$env_file" ]; then
+        # Homebrew installs are single-user, single-machine, so bind to
+        # loopback only. KIRO_GATEWAY_API_KEY has no safe default upstream
+        # (ships as literal "change-me"), so generate a random secret rather
+        # than leaving it guessable.
+        api_key="$(/usr/bin/openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\\n')"
+
+        # Bake kiro-cli's absolute path into KIRO_CLI_PATH. Otherwise the
+        # gateway resolves "kiro-cli" via $PATH at start, but `brew services`
+        # runs under launchd with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin)
+        # that won't include the user's shell PATH or the cask's app bundle --
+        # the lookup fails with FileNotFoundError and the service crash-loops.
+        # Prefer the cask's stable in-bundle binary on macOS, else resolve
+        # whatever is on PATH; fall back to the commented placeholder.
+        kiro_cli=""
+        if [ -x "/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli" ]; then
+          kiro_cli="/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli"
+        elif command -v kiro-cli >/dev/null 2>&1; then
+          kiro_cli="$(command -v kiro-cli)"
+        fi
+        if [ -n "$kiro_cli" ]; then
+          kiro_cli_line="KIRO_CLI_PATH=$kiro_cli"
+        else
+          # KIRO_CLI_PATH defaults to "kiro-cli" resolved via $PATH. Set this to
+          # an absolute path if kiro-cli isn't on PATH under launchd (caveats).
+          kiro_cli_line="#KIRO_CLI_PATH=kiro-cli"
+        fi
+
+        umask 077
+        cat > "$env_file" <<ENVEOF
+      SERVER_HOST=127.0.0.1
+      SERVER_PORT=8000
+      KIRO_GATEWAY_API_KEY=$api_key
+
+      $kiro_cli_line
+      ENVEOF
+      fi
+
+      ln -sf "$env_file" "#{libexec}/.env"
+
       cd "#{libexec}" || exit 1
       exec "#{libexec}/bin/python3" main.py "$@"
     EOS
-  end
-
-  # FormulaAudit/InstallSteps wants `post_install_steps`, but that name is a
-  # built-in Homebrew method invoked during `brew readall`/audit (syntax check),
-  # so its body would run when neither `var` nor `libexec/.env` exist yet and
-  # `ln_sf` below raises "No such file or directory". The real deferred hook is
-  # `post_install`; keep that name and silence the official-tap-only cop, which
-  # doesn't apply to this third-party tap.
-  # rubocop:disable FormulaAudit/InstallSteps
-  def post_install
-    (var/"ankitcharolia-kiro-gateway").mkpath
-    env_file = var/"ankitcharolia-kiro-gateway/.env"
-    unless env_file.exist?
-      # Homebrew installs are single-user, single-machine, so this binds to
-      # loopback only. KIRO_GATEWAY_API_KEY has no safe default upstream
-      # (ships as literal "change-me"), so generate a random secret rather
-      # than leaving it guessable.
-      require "securerandom"
-
-      # Bake kiro-cli's absolute path into KIRO_CLI_PATH at install time.
-      # Otherwise the gateway resolves "kiro-cli" via $PATH at service start,
-      # but `brew services` runs under launchd with a minimal PATH
-      # (/usr/bin:/bin:/usr/sbin:/sbin) that won't include the user's shell
-      # PATH or the cask's app bundle -- the lookup fails with FileNotFoundError
-      # and the service crash-loops. Prefer the resolved absolute path so the
-      # generated line works uncommented under launchd; fall back to the
-      # commented "kiro-cli" placeholder only when we can't find it.
-      kiro_cli = detect_kiro_cli
-      kiro_cli_line =
-        if kiro_cli
-          "KIRO_CLI_PATH=#{kiro_cli}"
-        else
-          # KIRO_CLI_PATH defaults to "kiro-cli" resolved via $PATH. Set this to
-          # an absolute path if kiro-cli isn't on PATH for services started by
-          # launchd (see caveats).
-          "#KIRO_CLI_PATH=kiro-cli"
-        end
-
-      env_file.write <<~EOS
-        SERVER_HOST=127.0.0.1
-        SERVER_PORT=8000
-        KIRO_GATEWAY_API_KEY=#{SecureRandom.hex(32)}
-
-        #{kiro_cli_line}
-      EOS
-    end
-    ln_sf env_file, libexec/".env"
-  end
-  # rubocop:enable FormulaAudit/InstallSteps
-
-  # Resolve kiro-cli to an absolute path for KIRO_CLI_PATH, preferring a
-  # location that stays valid under launchd's minimal PATH. Returns nil if
-  # kiro-cli can't be located, in which case the .env line stays commented.
-  def detect_kiro_cli
-    # The kiro-cli cask installs a "Kiro CLI.app" bundle on macOS; its
-    # in-bundle binary is the stable absolute target (Homebrew's bin symlink
-    # points here). Prefer it so the path survives even if the symlink dir
-    # isn't on launchd's PATH.
-    if OS.mac?
-      app_binary = Pathname.new("/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli")
-      return app_binary.to_s if app_binary.exist?
-    end
-
-    # Otherwise resolve whatever "kiro-cli" is on PATH to its real absolute
-    # path (following symlinks so the recorded value doesn't depend on a
-    # symlink dir being on launchd's PATH).
-    found = which("kiro-cli")
-    found&.realpath&.to_s
   end
 
   service do

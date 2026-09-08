@@ -2,7 +2,7 @@ class KiroGateway < Formula
   desc "Proxy API gateway for Kiro IDE & CLI (Amazon Q Developer / AWS CodeWhisperer)"
   homepage "https://github.com/kylerjensen/kiro-gateway"
   url "https://github.com/kylerjensen/kiro-gateway/archive/5c570b30ba37201bc86220a6713d0923703ab1e5.tar.gz"
-  version "2.4.dev"
+  version "2.4.dev.13"
   sha256 "d84b6417034aa07e6b263cd755a2f29af64ad08247651acab4a2d0fbd3d2f0db"
   license "AGPL-3.0-only"
 

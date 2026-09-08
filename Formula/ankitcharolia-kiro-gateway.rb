@@ -192,7 +192,7 @@ class AnkitcharoliaKiroGateway < Formula
     EOS
   end
 
-  def post_install
+  def post_install_steps
     (var/"ankitcharolia-kiro-gateway").mkpath
     env_file = var/"ankitcharolia-kiro-gateway/.env"
     unless env_file.exist?

@@ -192,7 +192,14 @@ class AnkitcharoliaKiroGateway < Formula
     EOS
   end
 
-  def post_install_steps
+  # FormulaAudit/InstallSteps wants `post_install_steps`, but that name is a
+  # built-in Homebrew method invoked during `brew readall`/audit (syntax check),
+  # so its body would run when neither `var` nor `libexec/.env` exist yet and
+  # `ln_sf` below raises "No such file or directory". The real deferred hook is
+  # `post_install`; keep that name and silence the official-tap-only cop, which
+  # doesn't apply to this third-party tap.
+  # rubocop:disable FormulaAudit/InstallSteps
+  def post_install
     (var/"ankitcharolia-kiro-gateway").mkpath
     env_file = var/"ankitcharolia-kiro-gateway/.env"
     unless env_file.exist?
@@ -231,6 +238,7 @@ class AnkitcharoliaKiroGateway < Formula
     end
     ln_sf env_file, libexec/".env"
   end
+  # rubocop:enable FormulaAudit/InstallSteps
 
   # Resolve kiro-cli to an absolute path for KIRO_CLI_PATH, preferring a
   # location that stays valid under launchd's minimal PATH. Returns nil if

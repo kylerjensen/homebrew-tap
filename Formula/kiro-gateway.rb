@@ -6,6 +6,12 @@ class KiroGateway < Formula
   sha256 "d84b6417034aa07e6b263cd755a2f29af64ad08247651acab4a2d0fbd3d2f0db"
   license "AGPL-3.0-only"
 
+  bottle do
+    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kiro-gateway-2.4.dev.13"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "ac40ffa117299274c92ae179ca180e7d530572efdac669fa162c438337e2af69"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "b6f51438dc5eab5ca5da55e06cad52ec43358420b0324a8dcba21700e1c7f534"
+  end
+
   depends_on "python@3.14"
 
   # tiktoken ships a compiled Rust extension with a linker-signed, @rpath-ID'd

@@ -55,6 +55,16 @@ class KiroGateway < Formula
           cd "#{libexec}" || exit 1
           exec "#{libexec}/venv/bin/python3" main.py "$@"
           ;;
+        token)
+          env_dir="#{var}/kiro-gateway"
+          env_file="$env_dir/.env"
+          if [ -f "$env_file" ]; then
+            grep "^PROXY_API_KEY=" "$env_file" | cut -d'=' -f2-
+          else
+            echo "PROXY_API_KEY not found — run 'kiro-gateway' once to generate it" >&2
+            exit 1
+          fi
+          ;;
       esac
 
       env_dir="#{var}/kiro-gateway"
@@ -72,6 +82,7 @@ class KiroGateway < Formula
       SERVER_HOST=127.0.0.1
       SERVER_PORT=8000
       PROXY_API_KEY=$api_key
+      KIRO_CLI_DB_FILE="~/Library/Application Support/kiro-cli/data.sqlite3"
       ENVEOF
       fi
 
@@ -98,12 +109,16 @@ class KiroGateway < Formula
   def caveats
     <<~EOS
       #{var}/kiro-gateway/.env binds to 127.0.0.1 only and auto-generates a
-      random PROXY_API_KEY on first run -- clients must send that key as their
-      bearer/x-api-key. Find it with:
+      random PROXY_API_KEY and sets KIRO_CLI_DB_FILE on first run -- clients
+      must send that key as their bearer/x-api-key. Find it with:
         grep PROXY_API_KEY #{var}/kiro-gateway/.env
 
-      A running service still needs valid Kiro credentials: set one of
-      KIRO_CREDS_FILE, KIRO_CLI_DB_FILE, or REFRESH_TOKEN in that .env (see
+      To output your token:
+        kiro-gateway token
+
+      A running service still needs valid Kiro credentials if not using
+      the default kiro-cli database: set one of
+      KIRO_CREDS_FILE or REFRESH_TOKEN in that .env (see
       the upstream README's configuration section):
         https://github.com/jwadow/kiro-gateway#readme
 

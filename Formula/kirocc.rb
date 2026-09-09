@@ -1,41 +1,24 @@
 class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
+
+  # Pinned to the kylerjensen/kirocc fork's main HEAD: Kiro "Auto" model
+  # support and the configurable request-body cap (upstream PRs ahead of any
+  # tag). Tracking a fork's main via a pinned commit SHA (not refs/heads/main)
+  # keeps the tarball + sha256 reproducible; see CLAUDE.md "Pinning fork
+  # commits over tags".
+  url "https://github.com/kylerjensen/kirocc/archive/0ed6f6bc04b1c3a92f5f2e0644b8cd1781ff9ca9.tar.gz"
+  version "0.12.0.dev.1"
+  sha256 "20e1391825d4e56aba655812fb9e3ca6cf5b62a3c36f81f275fcef5a9aad35b1"
   license "Apache-2.0"
 
-  # No explicit `version` here: it's redundant with (and audited against) the
-  # version Homebrew scans from the stable URL below, so it's hardcoded per-arch.
-  on_macos do
-    on_intel do
-      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_darwin_amd64.tar.gz"
-      sha256 "bec5ecd043dcf08075900a37ba44c48b3111cc582b75f33c9328b53e098fae43"
-    end
-    on_arm do
-      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_darwin_arm64.tar.gz"
-      sha256 "bd645bca7c08a900e6c36bb3e3d2078f35c1665d19ea2b7b8735c7df1b25e72e"
-    end
-  end
-
-  on_linux do
-    on_intel do
-      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_linux_amd64.tar.gz"
-      sha256 "97a36da994256dacfcc7075205321f7fef9e6200a5c650e096a67f229533bb45"
-    end
-    on_arm do
-      url "https://github.com/d-kuro/kirocc/releases/download/v0.9.1/kirocc_0.9.1_linux_arm64.tar.gz"
-      sha256 "2100af01858426acf422a51c2dc65ba8f16229b67003a9c2961df4233169b2af"
-    end
-  end
+  depends_on "go" => :build
 
   def install
-    bin.install "kirocc"
-
-    # Upstream releases are only ad-hoc signed (no Developer ID, not notarized),
-    # and Homebrew's downloader quarantines the fetched tarball. Without this,
-    # macOS Gatekeeper blocks first launch with "kirocc could not be verified".
-    if OS.mac?
-      quiet_system "/usr/bin/xattr", "-d", "com.apple.quarantine", bin/"kirocc"
-    end
+    # The dependency tree is pure-Go (modernc.org/sqlite), so build with cgo
+    # disabled for reproducible cross-platform bottles with no C toolchain.
+    ENV["CGO_ENABLED"] = "0"
+    system "go", "build", *std_go_args, "./cmd/kirocc"
   end
 
   service do
@@ -58,14 +41,17 @@ class Kirocc < Formula
         export ANTHROPIC_BASE_URL=http://127.0.0.1:3456
         export ANTHROPIC_AUTH_TOKEN=<your KIROCC_API_KEY value>
 
+        This build tracks the kylerjensen/kirocc fork's main (Kiro "Auto"
+        model support + configurable request-body cap). The client request
+        body cap defaults to 32 MiB; tune it with:
+          -max-request-body <bytes>
+          # or
+          export KIROCC_MAX_REQUEST_BODY='<bytes>'   # 0 = unlimited
+
       Security:
         By default kirocc listens on 127.0.0.1:3456.
         If you bind to a non-loopback host, set an API key:
           kirocc --api-key '<strong-random-key>'
-
-        Upstream binaries are ad-hoc signed, not notarized by Apple. This
-        formula strips the macOS quarantine flag on install so Gatekeeper
-        doesn't block the first launch.
 
       Credentials:
         Default DB path:

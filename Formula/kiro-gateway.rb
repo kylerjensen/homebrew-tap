@@ -1,17 +1,14 @@
 class KiroGateway < Formula
   desc "Proxy API gateway for Kiro IDE & CLI (Amazon Q Developer / AWS CodeWhisperer)"
   homepage "https://github.com/kylerjensen/kiro-gateway"
-  url "https://github.com/kylerjensen/kiro-gateway/archive/5c570b30ba37201bc86220a6713d0923703ab1e5.tar.gz"
+  # Pinned to the fork's main HEAD (PR #1: honor custom CA bundle for httpx so
+  # the gateway works behind corporate TLS-interception VPNs/proxies). Tracking
+  # the fork's main via a pinned commit SHA keeps the tarball + sha256
+  # reproducible; see CLAUDE.md "Pinning fork commits over tags".
+  url "https://github.com/kylerjensen/kiro-gateway/archive/f0fd0010a0fecebda7402af1f2901d164577d19f.tar.gz"
   version "2.4.dev.13"
-  sha256 "d84b6417034aa07e6b263cd755a2f29af64ad08247651acab4a2d0fbd3d2f0db"
+  sha256 "5a224d84b8ebde21950866328615ac9fe528675694acc3fdc6aed16ef1733404"
   license "AGPL-3.0-only"
-
-  bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kiro-gateway-2.4.dev.13"
-    rebuild 1
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "407dafefeadaf2a89b2ebd0d58dc19637464391d0414c5419c6de94c1914ab69"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "49c98b2968fdb38857194e0a807d6f9e13d062d522c38f234edfe1e9e10adc6a"
-  end
 
   depends_on "python@3.14"
 

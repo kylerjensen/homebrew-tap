@@ -23,8 +23,8 @@ cask "omlx-app" do
   end
 
   auto_updates true
-  depends_on macos: :sequoia
   depends_on arch: :arm64
+  depends_on macos: :sequoia
 
   app "oMLX.app"
 

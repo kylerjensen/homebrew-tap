@@ -8,7 +8,9 @@ class Kirocc < Formula
   # keeps the tarball + sha256 reproducible; see CLAUDE.md "Pinning fork
   # commits over tags".
   url "https://github.com/kylerjensen/kirocc/archive/0ed6f6bc04b1c3a92f5f2e0644b8cd1781ff9ca9.tar.gz"
-  version "0.12.0.dev.1"
+  # Forward of the fork's v0.12.0 tag (db7acbc): this head commit adds the
+  # effort-drop fix on top of it.
+  version "0.12.1-dev.1"
   sha256 "20e1391825d4e56aba655812fb9e3ca6cf5b62a3c36f81f275fcef5a9aad35b1"
   license "Apache-2.0"
 

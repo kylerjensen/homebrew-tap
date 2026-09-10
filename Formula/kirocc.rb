@@ -2,16 +2,15 @@ class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
 
-  # Pinned to the kylerjensen/kirocc fork's main HEAD: Kiro "Auto" model
-  # support and the configurable request-body cap (upstream PRs ahead of any
-  # tag). Tracking a fork's main via a pinned commit SHA (not refs/heads/main)
-  # keeps the tarball + sha256 reproducible; see CLAUDE.md "Pinning fork
-  # commits over tags".
-  url "https://github.com/kylerjensen/kirocc/archive/0ed6f6bc04b1c3a92f5f2e0644b8cd1781ff9ca9.tar.gz"
-  # Forward of the fork's v0.12.0 tag (db7acbc): this head commit adds the
-  # effort-drop fix on top of it.
-  version "0.12.1-dev.1"
-  sha256 "20e1391825d4e56aba655812fb9e3ca6cf5b62a3c36f81f275fcef5a9aad35b1"
+  # Pinned to the kylerjensen/kirocc fork's v0.12.0-dev.1 tag (fork main HEAD
+  # at 0ed6f6b): Kiro "Auto" model support, the configurable request-body cap,
+  # and the effort-drop fix, all ahead of any upstream tag. A fork dev tag is
+  # immutable, so the tarball + sha256 stay reproducible.
+  url "https://github.com/kylerjensen/kirocc/archive/refs/tags/v0.12.0-dev.1.tar.gz"
+  # Stable ordering: 0.12.0-dev.1 sorts before 0.12.0, but no 0.12.0 release
+  # exists on the fork, so this is the newest installable kirocc.
+  version "0.12.0-dev.1"
+  sha256 "2ebf015860ff731fc16a294858e624cf1f722b036c7f7e2e1f8292f744f77244"
   license "Apache-2.0"
 
   depends_on "go" => :build
@@ -43,9 +42,9 @@ class Kirocc < Formula
         export ANTHROPIC_BASE_URL=http://127.0.0.1:3456
         export ANTHROPIC_AUTH_TOKEN=<your KIROCC_API_KEY value>
 
-        This build tracks the kylerjensen/kirocc fork's main (Kiro "Auto"
-        model support + configurable request-body cap). The client request
-        body cap defaults to 32 MiB; tune it with:
+        This build tracks the kylerjensen/kirocc fork's v0.12.0-dev.1 tag
+        (Kiro "Auto" model support + configurable request-body cap). The
+        client request body cap defaults to 32 MiB; tune it with:
           -max-request-body <bytes>
           # or
           export KIROCC_MAX_REQUEST_BODY='<bytes>'   # 0 = unlimited

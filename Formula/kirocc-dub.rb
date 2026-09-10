@@ -1,5 +1,5 @@
 class KiroccDub < Formula
-  desc "Anthropic Messages API proxy to the Kiro backend (temp: dup-letter round-boundary fix)"
+  desc "Anthropic Messages API proxy to Kiro backend (temp, unreleased fix)"
   homepage "https://github.com/d-kuro/kirocc"
 
   # TEMPORARY formula, not for general use — remove once the fix below lands
@@ -23,11 +23,12 @@ class KiroccDub < Formula
   sha256 "359aa29d7e903b9e37e303bf94c67fd2dc78c550dc5a180eb1f363f1492c6cc7"
   license "Apache-2.0"
 
+  depends_on "go" => :build
+
   # Conflicts with the main kirocc formula: both build a binary named
   # "kirocc" from ./cmd/kirocc, so this installs it as "kirocc-dub" instead
   # to avoid clobbering/link-conflicting with a real kirocc install.
   conflicts_with "kirocc", because: "both install a service named kirocc; stop one before running the other"
-  depends_on "go" => :build
 
   def install
     # The dependency tree is pure-Go (modernc.org/sqlite), so build with cgo

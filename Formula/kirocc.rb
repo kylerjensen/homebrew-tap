@@ -16,6 +16,12 @@ class Kirocc < Formula
   sha256 "c5febb34a9b16036dcc594f1c7dfef4f416c86b5a90d35b6f89f3267a0c2a36d"
   license "Apache-2.0"
 
+  bottle do
+    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kirocc-0.12.0-dev.2"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "d5325f605d428e0a5efa109e51fda5a0cdf7d80d247fae17e2f7ed979493f489"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "7281fddd875bd93efc1ca2a15e3eb34dec7463e21c34e8cab4fd677e2e30fd73"
+  end
+
   depends_on "go" => :build
 
   def install

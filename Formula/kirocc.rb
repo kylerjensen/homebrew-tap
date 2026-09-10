@@ -21,6 +21,11 @@ class Kirocc < Formula
 
   depends_on "go" => :build
 
+  # kirocc-dub is a temporary formula tracking an unreleased fix ahead of
+  # this pinned tag; both build the same ./cmd/kirocc binary, so they
+  # conflict on the installed binary/service name.
+  conflicts_with "kirocc-dub", because: "both install a service named kirocc; stop one before running the other"
+
   def install
     # The dependency tree is pure-Go (modernc.org/sqlite), so build with cgo
     # disabled for reproducible cross-platform bottles with no C toolchain.

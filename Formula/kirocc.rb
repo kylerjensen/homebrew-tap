@@ -2,29 +2,21 @@ class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
 
-  # Pinned to the kylerjensen/kirocc fork's v0.12.0-dev.1 tag (fork main HEAD
-  # at 0ed6f6b): Kiro "Auto" model support, the configurable request-body cap,
-  # and the effort-drop fix, all ahead of any upstream tag. A fork dev tag is
-  # immutable, so the tarball + sha256 stay reproducible.
-  url "https://github.com/kylerjensen/kirocc/archive/refs/tags/v0.12.0-dev.1.tar.gz"
-  # Stable ordering: 0.12.0-dev.1 sorts before 0.12.0, but no 0.12.0 release
-  # exists on the fork, so this is the newest installable kirocc.
-  version "0.12.0-dev.1"
-  sha256 "2ebf015860ff731fc16a294858e624cf1f722b036c7f7e2e1f8292f744f77244"
+  # Pinned to the kylerjensen/kirocc fork's main HEAD at 7d36bd3 (forward of
+  # the v0.12.0-dev.1 tag): folds in the fix from kirocc PR #1 for a
+  # round-boundary text-loss bug (ResetAccumulator dropped text a prior
+  # ToolSearch/advisor round was still holding back) and a swallowed
+  # json.Marshal error on invalid UTF-8 in streamed SSE deltas. No new tag
+  # exists yet, so this pins the commit SHA directly (not refs/heads/main)
+  # to keep the tarball + sha256 reproducible; see CLAUDE.md "Pinning fork
+  # commits over tags". The previous kirocc-dub temp formula tracked this
+  # same fix and has been removed now that it's here.
+  url "https://github.com/kylerjensen/kirocc/archive/7d36bd39b0f56e70f2ca4d15919f5c436f3640f8.tar.gz"
+  version "0.12.0-dev.2"
+  sha256 "c5febb34a9b16036dcc594f1c7dfef4f416c86b5a90d35b6f89f3267a0c2a36d"
   license "Apache-2.0"
 
-  bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kirocc-0.12.0-dev.1"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "3e589cd41aab18c5bfe40be281f772dae0fec85c009ed91354822ae27ec322c9"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "b54e7ef50744be73e2f6df7ae9d14628edf9f5e32ca60393a85a66c1a158c217"
-  end
-
   depends_on "go" => :build
-
-  # kirocc-dub is a temporary formula tracking an unreleased fix ahead of
-  # this pinned tag; both build the same ./cmd/kirocc binary, so they
-  # conflict on the installed binary/service name.
-  conflicts_with "kirocc-dub", because: "both install a service named kirocc; stop one before running the other"
 
   def install
     # The dependency tree is pure-Go (modernc.org/sqlite), so build with cgo
@@ -53,9 +45,9 @@ class Kirocc < Formula
         export ANTHROPIC_BASE_URL=http://127.0.0.1:3456
         export ANTHROPIC_AUTH_TOKEN=<your KIROCC_API_KEY value>
 
-        This build tracks the kylerjensen/kirocc fork's v0.12.0-dev.1 tag
-        (Kiro "Auto" model support + configurable request-body cap). The
-        client request body cap defaults to 32 MiB; tune it with:
+        This build tracks the kylerjensen/kirocc fork's main (Kiro "Auto"
+        model support + configurable request-body cap). The client request
+        body cap defaults to 32 MiB; tune it with:
           -max-request-body <bytes>
           # or
           export KIROCC_MAX_REQUEST_BODY='<bytes>'   # 0 = unlimited

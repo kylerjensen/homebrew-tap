@@ -2,25 +2,17 @@ class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
 
-  # Pinned to the kylerjensen/kirocc fork's main HEAD at 7d36bd3 (forward of
-  # the v0.12.0-dev.1 tag): folds in the fix from kirocc PR #1 for a
-  # round-boundary text-loss bug (ResetAccumulator dropped text a prior
-  # ToolSearch/advisor round was still holding back) and a swallowed
-  # json.Marshal error on invalid UTF-8 in streamed SSE deltas. No new tag
-  # exists yet, so this pins the commit SHA directly (not refs/heads/main)
-  # to keep the tarball + sha256 reproducible; see CLAUDE.md "Pinning fork
-  # commits over tags". The previous kirocc-dub temp formula tracked this
-  # same fix and has been removed now that it's here.
-  url "https://github.com/kylerjensen/kirocc/archive/7d36bd39b0f56e70f2ca4d15919f5c436f3640f8.tar.gz"
-  version "0.12.0-dev.2"
-  sha256 "c5febb34a9b16036dcc594f1c7dfef4f416c86b5a90d35b6f89f3267a0c2a36d"
+  # Pinned to the kylerjensen/kirocc fork's main HEAD at 1198043 (forward of
+  # the v0.12.0-dev.1 tag): folds in the round-boundary text-loss fix and the
+  # swallowed json.Marshal error on invalid UTF-8 in streamed SSE deltas
+  # (kirocc PR #1), plus a fix to carry images in conversation history instead
+  # of dropping them (kirocc PR #3). No new tag exists yet, so this pins the
+  # commit SHA directly (not refs/heads/main) to keep the tarball + sha256
+  # reproducible; see CLAUDE.md "Pinning fork commits over tags".
+  url "https://github.com/kylerjensen/kirocc/archive/1198043640e5048139b4a1eadf137ac8051174bc.tar.gz"
+  version "0.12.0-dev.3"
+  sha256 "2ab219c1877fca53154d61b6d1db1159b6a9e9ebdbdb05d24adbe6b7a364ce87"
   license "Apache-2.0"
-
-  bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kirocc-0.12.0-dev.2"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "d5325f605d428e0a5efa109e51fda5a0cdf7d80d247fae17e2f7ed979493f489"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "7281fddd875bd93efc1ca2a15e3eb34dec7463e21c34e8cab4fd677e2e30fd73"
-  end
 
   depends_on "go" => :build
 

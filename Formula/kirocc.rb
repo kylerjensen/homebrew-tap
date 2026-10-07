@@ -19,6 +19,8 @@ class Kirocc < Formula
 
   bottle do
     root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kirocc-0.15.0-dev.1"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "53eb157b623e455d443b25fe737f0072fc59e4cc3d0fa76532af563ef6467a69"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "c88ad22f97c3967f7da8299a16df3c75de1b97c3d9093c63dde94f53cd7d2275"
   end
 
   depends_on "go" => :build

@@ -2,22 +2,23 @@ class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
 
-  # Pinned to the kylerjensen/kirocc fork's main HEAD at 1198043 (forward of
-  # the v0.12.0-dev.1 tag): folds in the round-boundary text-loss fix and the
-  # swallowed json.Marshal error on invalid UTF-8 in streamed SSE deltas
-  # (kirocc PR #1), plus a fix to carry images in conversation history instead
-  # of dropping them (kirocc PR #3). No new tag exists yet, so this pins the
-  # commit SHA directly (not refs/heads/main) to keep the tarball + sha256
-  # reproducible; see CLAUDE.md "Pinning fork commits over tags".
-  url "https://github.com/kylerjensen/kirocc/archive/1198043640e5048139b4a1eadf137ac8051174bc.tar.gz"
-  version "0.12.0-dev.3"
-  sha256 "2ab219c1877fca53154d61b6d1db1159b6a9e9ebdbdb05d24adbe6b7a364ce87"
+  # Pinned to the kylerjensen/kirocc fork's main HEAD at bbceb5c, tagged
+  # v0.15.0-dev.1. This merges upstream d-kuro/kirocc main (v0.15.0) into the
+  # fork and adds the fix for kirocc issue #168: image blocks were counted as
+  # text in the prompt token pre-count, so a single screenshot was reported as
+  # millions of input tokens and Claude Code auto-compacted almost every turn.
+  # Earlier fork-only work is still included (Auto model support, configurable
+  # request-body cap, round-boundary text-loss fix, invalid-UTF8 SSE fix, image
+  # carry in history). A matching tag exists, but we pin the commit SHA (not
+  # refs/heads/main) to keep the tarball + sha256 reproducible; see CLAUDE.md
+  # "Pinning fork commits over tags".
+  url "https://github.com/kylerjensen/kirocc/archive/bbceb5ccaa8c603bc08a8b44e54607ef50d9c520.tar.gz"
+  version "0.15.0-dev.1"
+  sha256 "e164a18e440be606627910c9f21289a0b70b4e619b7c72d0bdf520f218db2977"
   license "Apache-2.0"
 
   bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kirocc-0.12.0-dev.3"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "9430a32b12b6fb10276307384dd3ba8b2920b36e75e6adbe28d723e7b73a8c89"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "2df3170ea803bdbc34f3d04348681d38009c0452155ac2a365bea97a833f1202"
+    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kirocc-0.15.0-dev.1"
   end
 
   depends_on "go" => :build

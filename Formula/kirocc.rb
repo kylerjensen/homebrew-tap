@@ -2,19 +2,21 @@ class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
 
-  # Pinned to the kylerjensen/kirocc fork's main HEAD at bbceb5c, tagged
-  # v0.15.0-dev.1. This merges upstream d-kuro/kirocc main (v0.15.0) into the
-  # fork and adds the fix for kirocc issue #168: image blocks were counted as
-  # text in the prompt token pre-count, so a single screenshot was reported as
-  # millions of input tokens and Claude Code auto-compacted almost every turn.
-  # Earlier fork-only work is still included (Auto model support, configurable
+  # Pinned to the kylerjensen/kirocc fork's main HEAD at 724e50b. This is one
+  # commit ahead of tag v0.15.0-dev.1 (bbceb5c): it adds a fix in the request
+  # converter to omit standalone Claude Code billing system blocks. The
+  # v0.15.0-dev.1 base merges upstream d-kuro/kirocc main (v0.15.0) into the
+  # fork and fixes kirocc issue #168: image blocks were counted as text in the
+  # prompt token pre-count, so a single screenshot was reported as millions of
+  # input tokens and Claude Code auto-compacted almost every turn. Earlier
+  # fork-only work is still included (Auto model support, configurable
   # request-body cap, round-boundary text-loss fix, invalid-UTF8 SSE fix, image
-  # carry in history). A matching tag exists, but we pin the commit SHA (not
-  # refs/heads/main) to keep the tarball + sha256 reproducible; see CLAUDE.md
-  # "Pinning fork commits over tags".
-  url "https://github.com/kylerjensen/kirocc/archive/bbceb5ccaa8c603bc08a8b44e54607ef50d9c520.tar.gz"
-  version "0.15.0-dev.1"
-  sha256 "e164a18e440be606627910c9f21289a0b70b4e619b7c72d0bdf520f218db2977"
+  # carry in history). HEAD has no matching tag yet, so we pin the commit SHA
+  # (not refs/heads/main) to keep the tarball + sha256 reproducible; see
+  # CLAUDE.md "Pinning fork commits over tags".
+  url "https://github.com/kylerjensen/kirocc/archive/724e50bbbbfad0a4230f16533792c2a9439910a8.tar.gz"
+  version "0.15.0-dev.2"
+  sha256 "1c6129fcc15c97e732ccfe8194fb4121ef26c569c7e0bb4f803119c5cb6d356c"
   license "Apache-2.0"
 
   bottle do
@@ -27,8 +29,8 @@ class Kirocc < Formula
     # needed; a plain releases/download URL would fall through to the default
     # unauthenticated CurlDownloadStrategy and 404 against a private repo.
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "53eb157b623e455d443b25fe737f0072fc59e4cc3d0fa76532af563ef6467a69"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "c88ad22f97c3967f7da8299a16df3c75de1b97c3d9093c63dde94f53cd7d2275"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "30f7660ef0727e7748e09682d319653a4b75835271c083b9b4502c7e527b65ae"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "081ea32c30a29897b69c877100449d5ceaa7a9398692d7fd812fd48f38b15ca2"
   end
 
   depends_on "go" => :build

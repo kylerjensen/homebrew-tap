@@ -47,6 +47,24 @@ jobs:
           key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
           restore-keys: ${{ matrix.os }}-rubygems-
 
+      # Cache the Go build + module cache to speed up the kirocc bottle build,
+      # which is the slowest step (a from-source Go compile). The key is tied to
+      # kirocc.rb's contents: a version bump changes the source, but the Go
+      # build cache still reuses unchanged stdlib + dependency objects, so a
+      # partial restore (via restore-keys) still helps. GOCACHE/GOMODCACHE are
+      # forced on the build step below to these fixed paths, so the cache path
+      # matches the build path on both macOS and Linux (their Go defaults
+      # differ: ~/Library/Caches/go-build vs ~/.cache/go-build). Best-effort
+      # nice-to-have; only helps the Go formula.
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.go-cache/build
+            ${{ github.workspace }}/.go-cache/mod
+          key: ${{ matrix.os }}-go-${{ hashFiles('Formula/kirocc.rb') }}
+          restore-keys: ${{ matrix.os }}-go-
+
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
@@ -72,6 +90,11 @@ jobs:
       - run: brew test-bot --only-formulae --root-url=https://ghcr.io/v2/kylerjensen/tap
         env:
           HOMEBREW_DOCKER_REGISTRY_TOKEN: ${{ steps.base64-encode.outputs.token }}
+          # Point the Go toolchain at the cached dirs (see Cache Go build step).
+          # If test-bot's build sandbox strips these, the cache is simply unused
+          # and the step still succeeds.
+          GOCACHE: ${{ github.workspace }}/.go-cache/build
+          GOMODCACHE: ${{ github.workspace }}/.go-cache/mod
 
       - name: Upload bottles as artifact
         if: always()
@@ -207,13 +230,18 @@ jobs:
           git commit -m "Update bottles."
           echo "committed=true" >> "${GITHUB_OUTPUT}"
 
+      # Do NOT pass `token:` here. setup-homebrew already configured a
+      # http.extraheader Authorization credential on the tap repo for the whole
+      # job; git-try-push's own `token:` input adds a SECOND extraheader, and
+      # GitHub rejects the push with `remote: Duplicate header: "Authorization"`
+      # (HTTP 400). Relying on the inherited credential pushes cleanly.
       - name: Push bottle commit
         if: steps.commit.outputs.committed == 'true'
         uses: Homebrew/actions/git-try-push@main
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           directory: ${{ steps.checkout.outputs.tap_dir }}
           branch: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          tries: "3"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

@@ -13,8 +13,8 @@ class KiroGateway < Formula
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
     rebuild 3
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "3d795ebe96cc5d5bb8d71d8957e74681565d146755a9d35377318a6fadd47ebd"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "eb7c62c63f37d57585859a896de9736fc154949d67f8365bb0efa81391fd3373"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "b750aae95a7a6ce65b71786aa18b85b16d88005030aef0c8218189eb60a2b58b"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "fa14edc8f649bf91a92c1e3201de21bbee8927f40844a2ad69ec9928de4a7dc1"
   end
 
   depends_on "python@3.14"

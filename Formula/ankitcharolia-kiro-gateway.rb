@@ -15,7 +15,11 @@ class AnkitcharoliaKiroGateway < Formula
   license "AGPL-3.0-only"
 
   bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/ankitcharolia-kiro-gateway-2.4.1"
+    # Bottles published to GitHub Packages (GHCR), not GitHub Releases, so they
+    # resolve via the bearer-auth-aware CurlGitHubPackagesDownloadStrategy and
+    # work against a private tap repo. See kirocc.rb for the full rationale and
+    # why no "using:" is needed.
+    root_url "https://ghcr.io/v2/kylerjensen/tap"
     sha256 cellar: :any, arm64_tahoe:  "7060e35d6a8171ff762ba612f0dad8cdcb98518b8599a98f17b8ab2e6ece0dd5"
     sha256 cellar: :any, x86_64_linux: "a0e1aeb5b7804df97f377ec579a4de75de9cbbfaf0c5ed2a142b9a1bd7f80c3a"
   end

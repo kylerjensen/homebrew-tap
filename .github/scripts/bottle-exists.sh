@@ -48,16 +48,17 @@ case "${code}" in
     ;;
   200)
     # Index present; require a child manifest for this platform's ref.name.
-    if python3 - "${body}" "${ref_name}" <<'PY'
-import json, sys
-index_path, want = sys.argv[1], sys.argv[2]
-with open(index_path) as f:
-    index = json.load(f)
-for m in index.get("manifests", []):
-    if m.get("annotations", {}).get("org.opencontainers.image.ref.name") == want:
-        sys.exit(0)
-sys.exit(1)
-PY
+    # Parse with `brew ruby` (always available in CI) rather than python3/jq,
+    # which the ghcr.io/homebrew/brew container does not ship.
+    if brew ruby -e '
+      require "json"
+      index = JSON.parse(File.read(ARGV[0]))
+      want = ARGV[1]
+      found = index.fetch("manifests", []).any? do |m|
+        m.fetch("annotations", {})["org.opencontainers.image.ref.name"] == want
+      end
+      exit(found ? 0 : 1)
+    ' "${body}" "${ref_name}"
     then
       echo "Bottle ${ref_name} already published; skipping build." >&2
       exit 0

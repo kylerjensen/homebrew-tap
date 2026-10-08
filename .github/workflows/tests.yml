@@ -47,6 +47,25 @@ jobs:
           key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
           restore-keys: ${{ matrix.os }}-rubygems-
 
+      # Cache Homebrew's download cache (fetched source tarballs + dependency
+      # bottles). This is formula-agnostic: it speeds up any build that must
+      # re-fetch the same sources/deps (the Go toolchain bottle for kirocc, the
+      # Python deps for kiro-gateway), without pinning us to a language-specific
+      # build cache. It caches downloads, not compiled output, so a genuine
+      # version bump still recompiles; it just skips re-downloading. The cache
+      # path differs per OS (~/Library/Caches/Homebrew vs ~/.cache/Homebrew), so
+      # resolve it at runtime via `brew --cache`.
+      - name: Resolve Homebrew cache dir
+        id: brew_cache
+        run: echo "dir=$(brew --cache)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.brew_cache.outputs.dir }}
+          key: ${{ matrix.os }}-brew-downloads-${{ hashFiles('Formula/*.rb') }}
+          restore-keys: ${{ matrix.os }}-brew-downloads-
+
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
@@ -106,19 +125,23 @@ jobs:
           all_exist=true
           for f in ${changed}; do
             # Derive the GHCR image name, index tag, and per-platform ref name
-            # from the formula, matching github_packages.rb's mangling. The
-            # formula name is passed via ARGV, not interpolated into the script.
+            # straight from Homebrew's own GitHubPackages.version_rebuild (no
+            # hand-rolled rebuild encoding: the index tag uses "-<rebuild>", the
+            # per-platform ref.name uses ".<bottle_tag>.<rebuild>"). Formula name
+            # and bottle tag are passed via ARGV, not interpolated.
             meta="$(brew ruby -e '
+              require "github_packages"
               f = Formula[ARGV[0]]
               image = f.name.tr("@", "/").tr("+", "x")
               v = f.pkg_version
               rebuild = f.bottle_specification.rebuild
-              index_tag = rebuild.positive? ? "#{v}-#{rebuild}" : v.to_s
-              puts "#{image} #{index_tag}"
-            ' "kylerjensen/tap/${f}")"
-            image="${meta%% *}"
-            index_tag="${meta##* }"
-            ref_name="${index_tag}.${bottle_tag}"
+              index_tag = GitHubPackages.version_rebuild(v, rebuild)
+              ref_name  = GitHubPackages.version_rebuild(v, rebuild, ARGV[1])
+              puts "#{image}\t#{index_tag}\t#{ref_name}"
+            ' "kylerjensen/tap/${f}" "${bottle_tag}")"
+            image="$(printf '%s' "${meta}" | cut -f1)"
+            index_tag="$(printf '%s' "${meta}" | cut -f2)"
+            ref_name="$(printf '%s' "${meta}" | cut -f3)"
             set +e
             "${script}" "https://ghcr.io/v2/kylerjensen/tap" "${image}" "${index_tag}" "${ref_name}" "${bearer}"
             rc=$?

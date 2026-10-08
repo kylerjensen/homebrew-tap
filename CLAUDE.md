@@ -21,14 +21,37 @@ Same commands apply to `Casks/<name>.rb` (casks don't have a `test do` block).
 
 CI (`.github/workflows/tests.yml`) runs on every PR and push to `main` via `brew test-bot`:
 - `--only-tap-syntax` — Ruby/DSL syntax and style checks across the whole tap
-- `--only-formulae` — full audit + install + test, PRs only
+- `--only-formulae` — full audit + install + test, on both PRs and pushes to `main` (it builds the bottle the publish job consumes, so it can no longer be PR-only)
 - Matrix: `macos-26` and `ubuntu-latest` (in the `ghcr.io/homebrew/brew:main` container). `macos-15-intel` was deliberately dropped from the matrix (see comment in tests.yml) due to unrelated runner-side DNS failures.
 
-Merges to `main` happen via `brew pr-pull` (`.github/workflows/publish.yml`), triggered by adding the `pr-pull` label to a PR — this pulls built bottles and pushes the commit, then deletes the PR branch. Don't push formula bottle commits to `main` directly; let the label-triggered workflow do it.
+### Shipping a new/updated formula version (no `pr-pull`)
 
-Only label PRs that change a `Formula/*.rb` or `Casks/*.rb` file. `pr-pull`'s value is pulling the bottle `test-bot` built during CI and committing it into the formula with proper checksums — for docs-only/config-only PRs there's no bottle to pull, so it's a no-op wrapped in an extra CI round-trip; use a normal merge for those instead.
+Bottles are built and published automatically; there is no `brew pr-pull` label step and no `publish.yml`. To ship a version bump:
 
-`pr-pull` always makes the PR show as **closed**, never **merged**, on GitHub — this is expected, not a bug. It pushes the bottle commit straight to `main` via git rather than going through GitHub's merge API, so GitHub has no merge event to record. There's no ordering trick to get both (e.g. merging first, then labeling) — `pr-pull` needs the PR still open to read its CI bottle artifacts and pull its branch; once merged/closed, there's nothing left to pull. The bottle commit *is* the merge. Treat `git log origin/main` as the source of truth for whether a `pr-pull`'d PR landed, not the GitHub PR state badge.
+1. Branch off `main`.
+2. Edit the formula's `url` (point it at the new source tarball, e.g. a new commit-SHA archive) and bump `version`. Leave the existing `bottle do` sha256 lines as-is; CI clobbers them. Keep the `root_url` line.
+3. Commit, push the branch, open a PR.
+4. CI's `test-bot` matrix builds a bottle per platform and uploads them as artifacts. The `publish-bottles` job then merges every platform's sha256 into the formula with `brew bottle --merge --write --no-commit`, commits the refreshed `bottle do` block **back to the PR branch**, and pushes the OCI blobs to GHCR with `brew pr-upload --upload-only`.
+5. Merge the PR normally (a real GitHub merge — the PR shows as **merged**, unlike the old `pr-pull` flow). The same publish job runs again on the push to `main`; if the bottle is already current it is a no-op.
+6. `brew upgrade <formula>` then pulls the new bottle from GHCR.
+
+Why this is safe against loops and double-work: the bottle commit in step 4 is pushed with the default `GITHUB_TOKEN`, which GitHub does not let re-trigger a workflow run, so there is no build loop. When nothing changed (e.g. a docs-only push to `main`), `brew bottle --merge` produces no diff and the job self-skips. Order inside the publish job is load-bearing — merge, then commit, then upload — because `brew pr-upload`'s `check_transition_bottles!` re-reads the committed `.rb` and fails if its bottle metadata doesn't match the uploaded blobs.
+
+Fork PRs are skipped by the publish job: CI can't push a bottle commit back to a fork's branch. A maintainer must re-run such a bump from a branch in this repo.
+
+### Bottle hosting (GitHub Packages / GHCR)
+
+Bottles are published to GitHub Packages (GHCR) at `ghcr.io/v2/kylerjensen/tap`, not to GitHub Releases. This is the only Homebrew-supported way to serve bottles that keep working when the tap repo is private: a plain `github.com/.../releases/download/...` URL always resolves to the default unauthenticated `CurlDownloadStrategy` (no `Authorization` header is ever injected, so a private repo 404s), whereas any `ghcr.io/v2/...` URL is auto-detected as the bearer-auth-aware `CurlGitHubPackagesDownloadStrategy`. See issue #13 for the full diagnosis.
+
+How it fits together:
+
+- Each formula's `bottle do` block sets `root_url "https://ghcr.io/v2/kylerjensen/tap"`. The canonical GHCR root lowercases the org and strips the `homebrew-` repo prefix (`kylerjensen/homebrew-tap` becomes `kylerjensen/tap`), mirroring homebrew/core's `ghcr.io/v2/homebrew/core`. No `using:` argument is needed because the URL is auto-detected.
+- `tests.yml` `test-bot` job passes `--root-url=https://ghcr.io/v2/kylerjensen/tap` to `--only-formulae` and sets a base64-encoded `HOMEBREW_DOCKER_REGISTRY_TOKEN` so the build/install step can pull already-published dependency bottles.
+- `tests.yml` `publish-bottles` job uploads the freshly built bottle to GHCR with `brew pr-upload --upload-only`, authenticated by `HOMEBREW_GITHUB_PACKAGES_USER` / `HOMEBREW_GITHUB_PACKAGES_TOKEN` (both derived from `GITHUB_TOKEN`), and needs the `packages: write` permission. The destination root_url comes from the formula's `bottle do` block, but `--upload-only` still takes an explicit `--root-url` to route to the GHCR uploader.
+
+One-time manual step per formula: the first time CI publishes a bottle for a new formula, GHCR creates the container package **private by default** (it does not inherit repo visibility). To allow unauthenticated `brew install`, flip each package to Public at `github.com/users/kylerjensen/packages/container/<formula>/settings`, and link it to the repo there. If a package is left private, end users must `export HOMEBREW_GITHUB_PACKAGES_AUTH="Bearer <GHCR PAT with read:packages>"` before installing; public packages need no env var.
+
+Current intent: the tap repo is being flipped back to private (the GHCR migration is what makes that safe), but the bottle packages themselves are kept Public so `brew install kylerjensen/tap/<formula>` works without any auth setup.
 
 ## Architecture / conventions
 

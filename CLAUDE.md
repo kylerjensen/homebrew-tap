@@ -39,6 +39,10 @@ Why this is safe against loops and double-work: the bottle commit in step 4 is p
 
 Fork PRs are skipped by the publish job: CI can't push a bottle commit back to a fork's branch. A maintainer must re-run such a bump from a branch in this repo.
 
+**Mandatory: every source change must change `version` (or the `bottle do` `rebuild`).** Homebrew keys a bottle by `version` + `rebuild` + platform tag, never by the source archive SHA in `url`. If you repoint `url` at a new commit but leave `version` unchanged, the new build collides with the existing GHCR tag: end users get served the stale bottle, and `brew pr-upload` aborts with "already exists!". This discipline is also what makes the build-skip optimization below correct.
+
+To save CI time, the `test-bot` job skips the from-source rebuild when a bottle for the formula's current `version` already exists on GHCR for that platform (checked per-formula, per-platform via `.github/scripts/bottle-exists.sh` against the OCI image index). So an unchanged-`version` push (a re-run, or the push-to-`main` after merge) reuses the published bottle instead of recompiling; a genuine `version` bump finds no bottle and builds. The upload step passes `--warn-on-upload-failure` so that if it is ever reached with an already-published tag, it warns and skips rather than failing the job.
+
 ### Bottle hosting (GitHub Packages / GHCR)
 
 Bottles are published to GitHub Packages (GHCR) at `ghcr.io/v2/kylerjensen/tap`, not to GitHub Releases. This is the only Homebrew-supported way to serve bottles that keep working when the tap repo is private: a plain `github.com/.../releases/download/...` URL always resolves to the default unauthenticated `CurlDownloadStrategy` (no `Authorization` header is ever injected, so a private repo 404s), whereas any `ghcr.io/v2/...` URL is auto-detected as the bearer-auth-aware `CurlGitHubPackagesDownloadStrategy`. See issue #13 for the full diagnosis.

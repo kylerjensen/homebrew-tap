@@ -47,24 +47,6 @@ jobs:
           key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
           restore-keys: ${{ matrix.os }}-rubygems-
 
-      # Cache the Go build + module cache to speed up the kirocc bottle build,
-      # which is the slowest step (a from-source Go compile). The key is tied to
-      # kirocc.rb's contents: a version bump changes the source, but the Go
-      # build cache still reuses unchanged stdlib + dependency objects, so a
-      # partial restore (via restore-keys) still helps. GOCACHE/GOMODCACHE are
-      # forced on the build step below to these fixed paths, so the cache path
-      # matches the build path on both macOS and Linux (their Go defaults
-      # differ: ~/Library/Caches/go-build vs ~/.cache/go-build). Best-effort
-      # nice-to-have; only helps the Go formula.
-      - name: Cache Go build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ github.workspace }}/.go-cache/build
-            ${{ github.workspace }}/.go-cache/mod
-          key: ${{ matrix.os }}-go-${{ hashFiles('Formula/kirocc.rb') }}
-          restore-keys: ${{ matrix.os }}-go-
-
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
@@ -82,19 +64,87 @@ jobs:
           echo "::add-mask::${base64_token}"
           echo "token=${base64_token}" >> "${GITHUB_OUTPUT}"
 
+      # Skip the expensive source rebuild when a bottle for the formula's
+      # current version already exists on GHCR for THIS platform. Homebrew keys
+      # a bottle by version + rebuild + platform tag (never the source SHA), so
+      # this is sound only because our convention bumps version/rebuild on every
+      # source change (see CLAUDE.md). We probe each formula that changed versus
+      # the base ref; the build runs unless every changed formula already has a
+      # bottle for this runner's tag. Runs inside the tap that setup-homebrew
+      # checked out, so `brew ruby` reads the PR's formula definitions.
+      - name: Skip build if bottles already on GHCR
+        id: ghcr_check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          tap_dir="$(brew --repository "${GITHUB_REPOSITORY}")"
+          git config --global --add safe.directory "${tap_dir}"
+          cd "${tap_dir}"
+          # bottle-exists.sh ships in the tap itself (setup-homebrew checked it
+          # out here); no separate actions/checkout of this repo is needed.
+          script="${tap_dir}/.github/scripts/bottle-exists.sh"
+          # Changed formulae versus the base (PR) or the previous commit (push).
+          if [ -n "${BASE_SHA}" ]; then
+            git fetch --depth=1 origin "${BASE_SHA}" 2>/dev/null || true
+            range="${BASE_SHA}...HEAD"
+          else
+            range="HEAD^...HEAD"
+          fi
+          changed="$(git diff --name-only --diff-filter=d "${range}" -- Formula 2>/dev/null \
+            | sed -n 's#^Formula/\(.*\)\.rb$#\1#p' || true)"
+          if [ -z "${changed}" ]; then
+            echo "No formula changed; nothing to build." >&2
+            echo "skip_build=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # GHCR pull credential: base64 of the packages:read GITHUB_TOKEN.
+          bearer="$(printf '%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          # This runner's Homebrew bottle tag (e.g. arm64_tahoe, x86_64_linux).
+          bottle_tag="$(brew ruby -e 'puts Utils::Bottles.tag.to_s')"
+          all_exist=true
+          for f in ${changed}; do
+            # Derive the GHCR image name, index tag, and per-platform ref name
+            # from the formula, matching github_packages.rb's mangling. The
+            # formula name is passed via ARGV, not interpolated into the script.
+            meta="$(brew ruby -e '
+              f = Formula[ARGV[0]]
+              image = f.name.tr("@", "/").tr("+", "x")
+              v = f.pkg_version
+              rebuild = f.bottle_specification.rebuild
+              index_tag = rebuild.positive? ? "#{v}-#{rebuild}" : v.to_s
+              puts "#{image} #{index_tag}"
+            ' "kylerjensen/tap/${f}")"
+            image="${meta%% *}"
+            index_tag="${meta##* }"
+            ref_name="${index_tag}.${bottle_tag}"
+            set +e
+            "${script}" "https://ghcr.io/v2/kylerjensen/tap" "${image}" "${index_tag}" "${ref_name}" "${bearer}"
+            rc=$?
+            set -e
+            if [ "${rc}" -ne 0 ]; then
+              echo "Will build ${f} (bottle-exists rc=${rc})." >&2
+              all_exist=false
+            fi
+          done
+          if [ "${all_exist}" = true ]; then
+            echo "All changed formulae already bottled for ${bottle_tag}; skipping build." >&2
+            echo "skip_build=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip_build=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       # Build + test the bottle on both PRs and pushes to main. --root-url
       # points the built bottle's metadata at GHCR so it matches the formula's
       # root_url; the registry token lets the install step pull dependency
       # bottles already published there. Previously PR-only, but the publish
       # job below needs the freshly built *.bottle.json on push to main too.
+      # Skipped when every changed formula is already bottled for this platform.
       - run: brew test-bot --only-formulae --root-url=https://ghcr.io/v2/kylerjensen/tap
+        if: steps.ghcr_check.outputs.skip_build != 'true'
         env:
           HOMEBREW_DOCKER_REGISTRY_TOKEN: ${{ steps.base64-encode.outputs.token }}
-          # Point the Go toolchain at the cached dirs (see Cache Go build step).
-          # If test-bot's build sandbox strips these, the cache is simply unused
-          # and the step still succeeds.
-          GOCACHE: ${{ github.workspace }}/.go-cache/build
-          GOMODCACHE: ${{ github.workspace }}/.go-cache/mod
 
       - name: Upload bottles as artifact
         if: always()
@@ -246,13 +296,17 @@ jobs:
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so
       # the commit above must already be in the working tree. --upload-only
-      # skips pr-upload's own merge (we already merged). Guarded on merge, not
-      # commit: even if the .rb block didn't change (same sha256), re-uploading
-      # is a safe no-op that self-skips when the blob already exists.
+      # skips pr-upload's own merge (we already merged). --warn-on-upload-failure
+      # is load-bearing: pr-upload's preupload_check runs `skopeo inspect` and,
+      # without this flag, `odie`s ("already exists!") if the version+rebuild
+      # tag is already on GHCR. With it, an existing tag degrades to a warning
+      # and skip, so re-runs (and the push-to-main run after a PR merge) are
+      # idempotent. (The skip-if-exists guard in the build job normally stops us
+      # reaching here with nothing new, but this makes the upload itself safe.)
       - name: Upload bottles to GHCR
         if: steps.guard.outputs.skip == 'false' && steps.merge.outputs.changed == 'true'
         working-directory: bottles
         env:
           HOMEBREW_GITHUB_PACKAGES_USER: ${{ github.repository_owner }}
           HOMEBREW_GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: brew pr-upload --upload-only --root-url=https://ghcr.io/v2/kylerjensen/tap
+        run: brew pr-upload --upload-only --warn-on-upload-failure --root-url=https://ghcr.io/v2/kylerjensen/tap

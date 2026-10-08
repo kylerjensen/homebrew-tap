@@ -20,17 +20,10 @@ class Kirocc < Formula
   license "Apache-2.0"
 
   bottle do
-    # Bottles are published to GitHub Packages (GHCR), not GitHub Releases, so
-    # they can be fetched with an Authorization header when the tap repo is
-    # private. The canonical GHCR root_url lowercases the org and strips the
-    # "homebrew-" repo prefix (kylerjensen/homebrew-tap -> kylerjensen/tap),
-    # mirroring homebrew/core's ghcr.io/v2/homebrew/core. The ghcr.io URL is
-    # auto-detected as CurlGitHubPackagesDownloadStrategy, so no "using:" is
-    # needed; a plain releases/download URL would fall through to the default
-    # unauthenticated CurlDownloadStrategy and 404 against a private repo.
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "30f7660ef0727e7748e09682d319653a4b75835271c083b9b4502c7e527b65ae"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "081ea32c30a29897b69c877100449d5ceaa7a9398692d7fd812fd48f38b15ca2"
+    rebuild 1
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "d61d5e62fea0d83eb8cc87c114300cdf32de7d7c29dc3a4e6b5911abe27e0c76"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "5bd76b243a0cefe2a8f651a71457875ca4df830b4e7683d7c305e55d3e6267d8"
   end
 
   depends_on "go" => :build

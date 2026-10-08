@@ -11,10 +11,10 @@ class KiroGateway < Formula
   license "AGPL-3.0-only"
 
   bottle do
-    root_url "https://github.com/kylerjensen/homebrew-tap/releases/download/kiro-gateway-2.4.dev.13"
-    rebuild 2
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "cb869fb5b92c1586a3baf6489443ac4ceec344816a69016f115420cd048b0af8"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "f569a6c2f8454b9ac152c202ad599ebb42183feca10256edc8ef4d8f51eacd28"
+    root_url "https://ghcr.io/v2/kylerjensen/tap"
+    rebuild 3
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "d9c92fd5d7fbe49c74c7e59610c6f08a733d628ece3c8c408a91772c242ea536"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "20eb237419e6a3f5b0e5bf35adcb1aa739bcea95ceae92b6fe8de2b401787f40"
   end
 
   depends_on "python@3.14"

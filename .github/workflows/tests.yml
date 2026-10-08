@@ -29,6 +29,10 @@ jobs:
       checks: read
       contents: read
       pull-requests: read
+      # Formula tests fetch any already-published bottles from GHCR
+      # (ghcr.io/kylerjensen/tap); read access lets the test registry token
+      # authenticate against private packages.
+      packages: read
     steps:
       - name: Set up Homebrew
         id: set-up-homebrew
@@ -43,18 +47,289 @@ jobs:
           key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
           restore-keys: ${{ matrix.os }}-rubygems-
 
+      # Cache Homebrew's download cache (fetched source tarballs + dependency
+      # bottles). This is formula-agnostic: it speeds up any build that must
+      # re-fetch the same sources/deps (the Go toolchain bottle for kirocc, the
+      # Python deps for kiro-gateway), without pinning us to a language-specific
+      # build cache. It caches downloads, not compiled output, so a genuine
+      # version bump still recompiles; it just skips re-downloading. The cache
+      # path differs per OS (~/Library/Caches/Homebrew vs ~/.cache/Homebrew), so
+      # resolve it at runtime via `brew --cache`.
+      - name: Resolve Homebrew cache dir
+        id: brew_cache
+        run: echo "dir=$(brew --cache)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.brew_cache.outputs.dir }}
+          key: ${{ matrix.os }}-brew-downloads-${{ hashFiles('Formula/*.rb') }}
+          restore-keys: ${{ matrix.os }}-brew-downloads-
+
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
 
       - run: brew test-bot --only-tap-syntax
 
-      - run: brew test-bot --only-formulae
-        if: github.event_name == 'pull_request'
+      # Base64-encode GITHUB_TOKEN into the form test-bot expects for pulling
+      # bottles from GHCR during the formula-install test.
+      - name: Base64-encode GITHUB_TOKEN for HOMEBREW_DOCKER_REGISTRY_TOKEN
+        id: base64-encode
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base64_token=$(echo -n "${TOKEN}" | base64 | tr -d "\n")
+          echo "::add-mask::${base64_token}"
+          echo "token=${base64_token}" >> "${GITHUB_OUTPUT}"
+
+      # Skip the expensive source rebuild when a bottle for the formula's
+      # current version already exists on GHCR for THIS platform. Homebrew keys
+      # a bottle by version + rebuild + platform tag (never the source SHA), so
+      # this is sound only because our convention bumps version/rebuild on every
+      # source change (see CLAUDE.md). We probe each formula that changed versus
+      # the base ref; the build runs unless every changed formula already has a
+      # bottle for this runner's tag. Runs inside the tap that setup-homebrew
+      # checked out, so `brew ruby` reads the PR's formula definitions.
+      - name: Skip build if bottles already on GHCR
+        id: ghcr_check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          tap_dir="$(brew --repository "${GITHUB_REPOSITORY}")"
+          git config --global --add safe.directory "${tap_dir}"
+          cd "${tap_dir}"
+          # bottle-exists.sh ships in the tap itself (setup-homebrew checked it
+          # out here); no separate actions/checkout of this repo is needed.
+          script="${tap_dir}/.github/scripts/bottle-exists.sh"
+          # Changed formulae versus the base (PR) or the previous commit (push).
+          if [ -n "${BASE_SHA}" ]; then
+            git fetch --depth=1 origin "${BASE_SHA}" 2>/dev/null || true
+            range="${BASE_SHA}...HEAD"
+          else
+            range="HEAD^...HEAD"
+          fi
+          changed="$(git diff --name-only --diff-filter=d "${range}" -- Formula 2>/dev/null \
+            | sed -n 's#^Formula/\(.*\)\.rb$#\1#p' || true)"
+          if [ -z "${changed}" ]; then
+            echo "No formula changed; nothing to build." >&2
+            echo "skip_build=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # GHCR pull credential: base64 of the packages:read GITHUB_TOKEN.
+          bearer="$(printf '%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          # This runner's Homebrew bottle tag (e.g. arm64_tahoe, x86_64_linux).
+          bottle_tag="$(brew ruby -e 'puts Utils::Bottles.tag.to_s')"
+          all_exist=true
+          for f in ${changed}; do
+            # Derive the GHCR image name, index tag, and per-platform ref name
+            # straight from Homebrew's own GitHubPackages.version_rebuild (no
+            # hand-rolled rebuild encoding: the index tag uses "-<rebuild>", the
+            # per-platform ref.name uses ".<bottle_tag>.<rebuild>"). Formula name
+            # and bottle tag are passed via ARGV, not interpolated.
+            meta="$(brew ruby -e '
+              require "github_packages"
+              f = Formula[ARGV[0]]
+              image = f.name.tr("@", "/").tr("+", "x")
+              v = f.pkg_version
+              rebuild = f.bottle_specification.rebuild
+              index_tag = GitHubPackages.version_rebuild(v, rebuild)
+              ref_name  = GitHubPackages.version_rebuild(v, rebuild, ARGV[1])
+              puts "#{image}\t#{index_tag}\t#{ref_name}"
+            ' "kylerjensen/tap/${f}" "${bottle_tag}")"
+            image="$(printf '%s' "${meta}" | cut -f1)"
+            index_tag="$(printf '%s' "${meta}" | cut -f2)"
+            ref_name="$(printf '%s' "${meta}" | cut -f3)"
+            set +e
+            "${script}" "https://ghcr.io/v2/kylerjensen/tap" "${image}" "${index_tag}" "${ref_name}" "${bearer}"
+            rc=$?
+            set -e
+            if [ "${rc}" -ne 0 ]; then
+              echo "Will build ${f} (bottle-exists rc=${rc})." >&2
+              all_exist=false
+            fi
+          done
+          if [ "${all_exist}" = true ]; then
+            echo "All changed formulae already bottled for ${bottle_tag}; skipping build." >&2
+            echo "skip_build=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip_build=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # Build + test the bottle on both PRs and pushes to main. --root-url
+      # points the built bottle's metadata at GHCR so it matches the formula's
+      # root_url; the registry token lets the install step pull dependency
+      # bottles already published there. Previously PR-only, but the publish
+      # job below needs the freshly built *.bottle.json on push to main too.
+      # Skipped when every changed formula is already bottled for this platform.
+      - run: brew test-bot --only-formulae --root-url=https://ghcr.io/v2/kylerjensen/tap
+        if: steps.ghcr_check.outputs.skip_build != 'true'
+        env:
+          HOMEBREW_DOCKER_REGISTRY_TOKEN: ${{ steps.base64-encode.outputs.token }}
 
       - name: Upload bottles as artifact
-        if: always() && github.event_name == 'pull_request'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bottles_${{ matrix.os }}
           path: '*.bottle.*'
+
+  # Fan-in: merge every runner's bottle sha256 into the formula, commit the
+  # refreshed bottle block, and push the OCI blobs to GHCR. This replaces the
+  # old `brew pr-pull` label-merge procedure entirely. The build matrix above
+  # fans out (one bottle per platform); this job fans in.
+  #
+  # Flow (order is load-bearing, see below):
+  #   1. download all per-runner *.bottle.json into one dir
+  #   2. `brew bottle --merge --write --no-commit` rewrites the .rb sha256
+  #   3. if the .rb changed, commit it back to the branch (PR) or main (push)
+  #   4. `brew pr-upload --upload-only` pushes the blobs to GHCR
+  #
+  # Merge -> commit -> upload is required: `brew pr-upload`'s
+  # check_transition_bottles! re-reads the committed .rb and fails if its
+  # bottle metadata doesn't match the uploaded blobs.
+  #
+  # The commit in step 3 uses the default GITHUB_TOKEN, so GitHub does NOT
+  # re-trigger a workflow run for it -- this both avoids an infinite loop and
+  # means the committed bottle isn't independently re-verified (it was already
+  # install-tested by test-bot in the build job that produced it). When a
+  # bottle is already current (e.g. a docs-only push to main), step 2 produces
+  # no diff and the job is a no-op.
+  publish-bottles:
+    needs: test-bot
+    runs-on: ubuntu-latest
+    container: ghcr.io/homebrew/brew:main
+    # The homebrew/brew container's default shell is `sh` (dash); several steps
+    # below use bash arrays and `shopt`, so force bash for all run steps.
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up git
+        id: git_setup
+        uses: Homebrew/actions/git-user-config@main
+
+      - name: Download all bottle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bottles_*
+          merge-multiple: true
+          path: bottles
+
+      # Skip the whole publish on fork PRs: CI has no write access to a fork's
+      # branch, so the commit-back and GHCR push would fail. Those still need a
+      # maintainer to re-run from a branch in this repo. On push to main and on
+      # same-repo PRs, head.repo.full_name is either empty or equal to the repo.
+      - name: Guard against fork PRs
+        id: guard
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ -n "${HEAD_REPO}" ] && [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+            echo "Fork PR (${HEAD_REPO}); skipping bottle publish."
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # setup-homebrew taps the repo at its default branch and leaves the tap's
+      # git auth configured for the whole job via its `token` input. Move the
+      # tap onto the exact ref CI built (the PR head branch, or main for a push)
+      # so the merge/commit/upload all operate on the tree whose formula was
+      # bottled.
+      - name: Check out target ref in the tap
+        if: steps.guard.outputs.skip == 'false'
+        id: checkout
+        env:
+          TARGET_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          tap_dir="$(brew --repository "${GITHUB_REPOSITORY}")"
+          cd "${tap_dir}"
+          git config --global --add safe.directory "${tap_dir}"
+          git fetch origin "${TARGET_REF}"
+          git checkout -B "${TARGET_REF}" "origin/${TARGET_REF}"
+          echo "tap_dir=${tap_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Merge bottle sha256 into formulae
+        if: steps.guard.outputs.skip == 'false'
+        id: merge
+        run: |
+          shopt -s nullglob
+          jsons=(bottles/*.bottle.json)
+          if [ ${#jsons[@]} -eq 0 ]; then
+            echo "No bottle JSON produced; nothing to publish."
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # brew bottle --merge resolves formulae via the tap, so pass absolute
+          # JSON paths and run from the tapped checkout prepared above. --write
+          # --no-commit rewrites the .rb sha256 without committing (we commit
+          # the result ourselves in the next step).
+          abs_jsons=()
+          for j in "${jsons[@]}"; do abs_jsons+=("$(pwd)/$j"); done
+          cd "$(brew --repository "${GITHUB_REPOSITORY}")"
+          brew bottle --merge --write --no-commit "${abs_jsons[@]}"
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+
+      # Commit the refreshed bottle block in the tapped checkout. No push here;
+      # git-try-push below does the race-safe push (rebasing on origin drift).
+      # The commit uses GITHUB_TOKEN, so GitHub does not re-trigger CI for it.
+      - name: Commit refreshed bottle block
+        if: steps.guard.outputs.skip == 'false' && steps.merge.outputs.changed == 'true'
+        id: commit
+        env:
+          GIT_NAME: ${{ steps.git_setup.outputs.name }}
+          GIT_EMAIL: ${{ steps.git_setup.outputs.email }}
+        run: |
+          cd "$(brew --repository "${GITHUB_REPOSITORY}")"
+          if git diff --quiet -- Formula Casks; then
+            echo "Bottle block already up to date; no commit needed."
+            echo "committed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          git config user.name "${GIT_NAME}"
+          git config user.email "${GIT_EMAIL}"
+          git add Formula Casks
+          git commit -m "Update bottles."
+          echo "committed=true" >> "${GITHUB_OUTPUT}"
+
+      # Do NOT pass `token:` here. setup-homebrew already configured a
+      # http.extraheader Authorization credential on the tap repo for the whole
+      # job; git-try-push's own `token:` input adds a SECOND extraheader, and
+      # GitHub rejects the push with `remote: Duplicate header: "Authorization"`
+      # (HTTP 400). Relying on the inherited credential pushes cleanly.
+      - name: Push bottle commit
+        if: steps.commit.outputs.committed == 'true'
+        uses: Homebrew/actions/git-try-push@main
+        with:
+          directory: ${{ steps.checkout.outputs.tap_dir }}
+          branch: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          tries: "3"
+
+      # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
+      # GHCR; it reads the merged bottle metadata from the tapped formula, so
+      # the commit above must already be in the working tree. --upload-only
+      # skips pr-upload's own merge (we already merged). --warn-on-upload-failure
+      # is load-bearing: pr-upload's preupload_check runs `skopeo inspect` and,
+      # without this flag, `odie`s ("already exists!") if the version+rebuild
+      # tag is already on GHCR. With it, an existing tag degrades to a warning
+      # and skip, so re-runs (and the push-to-main run after a PR merge) are
+      # idempotent. (The skip-if-exists guard in the build job normally stops us
+      # reaching here with nothing new, but this makes the upload itself safe.)
+      - name: Upload bottles to GHCR
+        if: steps.guard.outputs.skip == 'false' && steps.merge.outputs.changed == 'true'
+        working-directory: bottles
+        env:
+          HOMEBREW_GITHUB_PACKAGES_USER: ${{ github.repository_owner }}
+          HOMEBREW_GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: brew pr-upload --upload-only --warn-on-upload-failure --root-url=https://ghcr.io/v2/kylerjensen/tap

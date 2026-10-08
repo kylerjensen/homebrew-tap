@@ -105,6 +105,11 @@ jobs:
     needs: test-bot
     runs-on: ubuntu-latest
     container: ghcr.io/homebrew/brew:main
+    # The homebrew/brew container's default shell is `sh` (dash); several steps
+    # below use bash arrays and `shopt`, so force bash for all run steps.
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: write
       packages: write

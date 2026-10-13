@@ -43,6 +43,23 @@ Fork PRs are skipped by the publish job: CI can't push a bottle commit back to a
 
 To save CI time, the `test-bot` job skips the from-source rebuild when a bottle for the formula's current `version` already exists on GHCR for that platform (checked per-formula, per-platform via `.github/scripts/bottle-exists.sh` against the OCI image index). So an unchanged-`version` push (a re-run, or the push-to-`main` after merge) reuses the published bottle instead of recompiling; a genuine `version` bump finds no bottle and builds. The upload step passes `--warn-on-upload-failure` so that if it is ever reached with an already-published tag, it warns and skips rather than failing the job.
 
+### Periodic version bumps for `llama-swap`
+
+`llama-swap` tracks upstream's tagged releases (not a pinned fork commit), and upstream ships frequent, monotonically increasing integer tags (`v264`, `v265`, …). It has no autobump/livecheck wired up, so bumps are manual and periodic. To bump:
+
+1. Find the latest release tag:
+   ```bash
+   curl -sL https://api.github.com/repos/mostlygeek/llama-swap/releases/latest | grep '"tag_name"'
+   ```
+2. Fetch that release's checksums and copy the four `darwin_arm64`, `darwin_amd64`, `linux_arm64`, `linux_amd64` sha256 values:
+   ```bash
+   curl -sL https://github.com/mostlygeek/llama-swap/releases/download/v<N>/llama-swap_<N>_checksums.txt
+   ```
+3. In [Formula/llama-swap.rb](Formula/llama-swap.rb), bump `version` to the bare integer (the `url`s interpolate `#{version}`, so they update automatically) and replace all four `sha256` lines. Leave the `bottle do` `root_url` as-is; CI clobbers the bottle sha256s.
+4. Follow the normal shipping flow above (branch, PR, CI builds + publishes bottles, merge).
+
+Because the version is a bare integer and the only required source change is `version` + the four checksums, this is a mechanical, well-specified bump: a good candidate to delegate to a cheaper model, with `brew style` + `brew audit --strict --online` + the CI install/test as the backstop. Watch for upstream changing its release-asset naming or adding/removing a platform variant; if that happens the `on_macos`/`on_linux` url/sha structure needs a corresponding edit, which is no longer purely mechanical.
+
 ### Bottle hosting (GitHub Packages / GHCR)
 
 Bottles are published to GitHub Packages (GHCR) at `ghcr.io/v2/kylerjensen/tap`, not to GitHub Releases. This is the only Homebrew-supported way to serve bottles that keep working when the tap repo is private: a plain `github.com/.../releases/download/...` URL always resolves to the default unauthenticated `CurlDownloadStrategy` (no `Authorization` header is ever injected, so a private repo 404s), whereas any `ghcr.io/v2/...` URL is auto-detected as the bearer-auth-aware `CurlGitHubPackagesDownloadStrategy`. See issue #13 for the full diagnosis.
@@ -67,6 +84,7 @@ Recurring patterns across formulae in this tap:
 - **No native packaging from upstream** (e.g. [kiro-gateway.rb](Formula/kiro-gateway.rb)): vendor source into `libexec`, create a private venv/dependency install, and write a wrapper launcher script into `bin` rather than relying on Python::Virtualenv or similar helpers that assume a `pyproject.toml`/`setup.py`.
 - **Runtime credential/config auto-detection**: formulae that need to discover user credentials at *service start time* (not install time) do so from the launcher script itself, because Homebrew's build sandbox denies filesystem reads outside a fixed allowlist during `install`/`post_install` — see the kiro-gateway launcher script and its `post_install` `.env` handling.
 - **Pinning fork commits over tags**: when tracking a fork's `main` branch instead of upstream's tagged releases (because needed fixes land ahead of upstream tags), pin the `url` to a specific commit SHA (not `refs/heads/main`) so the tarball and its `sha256` stay reproducible.
+- **Prebuilt per-platform release binaries** (e.g. [llama-swap.rb](Formula/llama-swap.rb)): when upstream publishes ready-to-run per-OS/per-arch release tarballs, select the archive with `on_macos`/`on_linux` + `on_arm`/`on_intel` and a `sha256` per variant (from upstream's `*_checksums.txt`) rather than building from source. Keep the `bottle do` block with the GHCR `root_url` so CI still bottles the unpacked binary and private-repo users get a working `brew install`.
 - **`service do` blocks**: formulae exposing a long-running process define a `brew services`-compatible service block (`run`, `keep_alive`, `log_path`/`error_log_path`, `working_dir`) rather than expecting users to run the binary manually.
 - **Security-conscious defaults in `caveats`**: formulae that bind to network ports document that they default to loopback-only and explain when/why to set an API key or widen the bind host.
 - **`test do` blocks avoid touching `$HOME` or real network/service state** — they assert against `--help`/`--version` output or deterministic early-exit error messages (e.g. missing-credentials validation) rather than exercising real functionality that would mutate user state.
@@ -76,6 +94,7 @@ Recurring patterns across formulae in this tap:
 - [Formula/kirocc.rb](Formula/kirocc.rb) — Anthropic Messages API proxy to the Kiro backend; prebuilt multi-arch/multi-OS binary releases.
 - [Formula/kiro-gateway.rb](Formula/kiro-gateway.rb) — OpenAI/Anthropic-compatible proxy gateway for Kiro (kylerjensen fork); vendored Python source + private venv, tracks fork's `main` via pinned commit SHA, `brew services`-compatible.
 - [Formula/icloud-sync.rb](Formula/icloud-sync.rb) — symlinks `$HOME` directories into iCloud Drive; macOS-only, wraps a pre-bundled Node ESM script.
+- [Formula/llama-swap.rb](Formula/llama-swap.rb) — proxy server for swapping models on llama.cpp; prebuilt per-OS/per-arch upstream release binaries, `brew services`-compatible (requires a user-created `~/.llama-swap/config.yaml`). Version-bump cadence below.
 - [Casks/omlx-app.rb](Casks/omlx-app.rb) — menu bar app cask for the oMLX LLM inference server; per-OS-version download variants, arm64-only.
 
 `audit_exceptions/flat_namespace_allowlist.json` allowlists formulae for `brew audit`'s flat-namespace check.

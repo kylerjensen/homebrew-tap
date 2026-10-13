@@ -2,28 +2,29 @@ class Kirocc < Formula
   desc "Anthropic Messages API proxy to the Kiro backend"
   homepage "https://github.com/d-kuro/kirocc"
 
-  # Pinned to the kylerjensen/kirocc fork's main HEAD at 724e50b. This is one
-  # commit ahead of tag v0.15.0-dev.1 (bbceb5c): it adds a fix in the request
-  # converter to omit standalone Claude Code billing system blocks. The
-  # v0.15.0-dev.1 base merges upstream d-kuro/kirocc main (v0.15.0) into the
-  # fork and fixes kirocc issue #168: image blocks were counted as text in the
-  # prompt token pre-count, so a single screenshot was reported as millions of
-  # input tokens and Claude Code auto-compacted almost every turn. Earlier
-  # fork-only work is still included (Auto model support, configurable
-  # request-body cap, round-boundary text-loss fix, invalid-UTF8 SSE fix, image
-  # carry in history). HEAD has no matching tag yet, so we pin the commit SHA
-  # (not refs/heads/main) to keep the tarball + sha256 reproducible; see
-  # CLAUDE.md "Pinning fork commits over tags".
-  url "https://github.com/kylerjensen/kirocc/archive/724e50bbbbfad0a4230f16533792c2a9439910a8.tar.gz"
-  version "0.15.0-dev.2"
-  sha256 "1c6129fcc15c97e732ccfe8194fb4121ef26c569c7e0bb4f803119c5cb6d356c"
+  # Pinned to the kylerjensen/kirocc fork's main HEAD at 74bad84. This is two
+  # commits ahead of tag v0.15.0-dev.1 (bbceb5c): it makes the
+  # X-Claude-Code-Session-Id request header optional in the messages handler,
+  # on top of the earlier fix in the request converter to omit standalone
+  # Claude Code billing system blocks. The v0.15.0-dev.1 base merges upstream
+  # d-kuro/kirocc main (v0.15.0) into the fork and fixes kirocc issue #168:
+  # image blocks were counted as text in the prompt token pre-count, so a
+  # single screenshot was reported as millions of input tokens and Claude Code
+  # auto-compacted almost every turn. Earlier fork-only work is still included
+  # (Auto model support, configurable request-body cap, round-boundary
+  # text-loss fix, invalid-UTF8 SSE fix, image carry in history). HEAD has no
+  # matching tag yet, so we pin the commit SHA (not refs/heads/main) to keep
+  # the tarball + sha256 reproducible; see CLAUDE.md "Pinning fork commits over
+  # tags".
+  url "https://github.com/kylerjensen/kirocc/archive/74bad847115673296f421432132cbb5632468c03.tar.gz"
+  version "0.15.0-dev.3"
+  sha256 "2a064638afbeb7472e7941c980df1afacedbee174d481fcb4ecac0f8d5931962"
   license "Apache-2.0"
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    rebuild 1
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "6060b817227aabddf07ba6a1923e3544cdfe5b35f96bb15a27253e7249e70138"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "2886d3da653380db682fe2380d68c3def0042fd548d56f759481a096b7c4a4f8"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "f686a1e494bd76ef51e18de9f216158785faffac53177bd02279909a531f5c36"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "299b55b1309a4934e2408b912c261f180f06166d6e82faf7b7dd172f06ae1015"
   end
 
   depends_on "go" => :build

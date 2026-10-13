@@ -6,8 +6,8 @@ class LlamaSwap < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "0ff3158453b3c479223360c2275c86b541293f376b4edb63dfa7179f9e53063a"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "eaa15e339d450e33753340a9ca39229e6f5c67087947ebfbbcf41a24953b4922"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "36f05331d50913f74dba193060f5a5125d3cfea0702c9af055e8a1c70a9b0eaa"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "d21fbd3515712d24418555c7b1357e75bcd860731ba7cf48ac6eaabc3ade6a80"
   end
 
   # Upstream ships prebuilt, per-OS/per-arch release tarballs (no `go build`

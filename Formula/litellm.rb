@@ -26,10 +26,7 @@ class Litellm < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    # Bumped because adding the postgresql dependency + litellm-setup changes
-    # the bottle contents; the 1.105.1 tag is already published on GHCR.
-    rebuild 1
-    sha256 cellar: :any, arm64_tahoe: "1fb9ec4d2c5f8645de918d34a92b2723ee623e7b626b5d2d7c0315bcaf42c29d"
+    sha256 cellar: :any, arm64_tahoe: "2ef9291f280c7e4c819592f77feb7f590ed003cfbe4c2a733b0e4c6dbfb95f21"
   end
 
   # macOS only: this tap ships macOS installs by owner decision. litellm

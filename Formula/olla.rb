@@ -11,8 +11,8 @@ class Olla < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "7ba575a5236dae453a31267b18829d8f799c640fa8e6d3bbefc8e9b575c54a25"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "0cfecb6cdbb03c438685a832db2a97a7f5b91d9fc09e5e3a832c12fc5be669f2"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "650e01fb7d31da7fb6115331aa1b6d8f6e4c94f717db90f7b79b80944206dae9"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "ab498205a666445a36238fd217057afeb14b1532c341c297a27982cb167c895f"
   end
 
   # Upstream ships prebuilt, per-OS/per-arch release archives via goreleaser (no

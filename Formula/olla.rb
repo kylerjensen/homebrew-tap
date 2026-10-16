@@ -11,14 +11,18 @@ class Olla < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "650e01fb7d31da7fb6115331aa1b6d8f6e4c94f717db90f7b79b80944206dae9"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "ab498205a666445a36238fd217057afeb14b1532c341c297a27982cb167c895f"
+    rebuild 1
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "650e01fb7d31da7fb6115331aa1b6d8f6e4c94f717db90f7b79b80944206dae9"
   end
 
-  # Upstream ships prebuilt, per-OS/per-arch release archives via goreleaser (no
-  # `go build` needed), so select the right archive by platform rather than
-  # vendoring + compiling. macOS archives are .zip; Linux are .tar.gz. The
-  # source sha256s are the upstream release checksums (checksums.txt). CI still
+  # macOS only: the tap ships macOS installs by owner decision. olla is
+  # cross-platform upstream, but Linux archives aren't fetched or tested here.
+  depends_on :macos
+
+  # Upstream ships prebuilt, per-arch release archives via goreleaser (no
+  # `go build` needed), so select the right darwin .zip by CPU rather than
+  # vendoring + compiling. The source sha256s are the upstream release
+  # checksums (checksums.txt). CI still
   # bottles whatever `install` lays down and publishes it to GHCR (see the
   # bottle block + CLAUDE.md), so private-repo users get a working `brew install`
   # without re-fetching the GitHub release.
@@ -30,17 +34,6 @@ class Olla < Formula
     on_intel do
       url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_amd64.zip"
       sha256 "b70b6bdcb9b182ed2019bb2634f7752feb6c7c316df938cf2a1b679d8f5ba464"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_linux_arm64.tar.gz"
-      sha256 "7a632ba3bf53a1b37b9de57d7d472099134c96f0d0b6f644379012e57c8efda7"
-    end
-    on_intel do
-      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_linux_amd64.tar.gz"
-      sha256 "fafb482e50def1f56f210ef28b46c67021bb6e25b0ff0a595682e2aac214fcc4"
     end
   end
 
@@ -57,7 +50,7 @@ class Olla < Formula
     # but routes nothing, so the service points it at ~/.olla/config.yaml, which
     # the user must create first (see caveats). Dir.home resolves to the
     # installing user's home at formula-eval time -- "~" is not expanded inside
-    # the generated launchd plist/systemd unit, so an absolute path is required.
+    # the generated launchd plist, so an absolute path is required.
     # working_dir is the same dir so olla's relative ./logs (it MkdirAll's it)
     # stays under the user's home. It binds to localhost:40114 by default
     # (loopback only); widen it by setting server.host in the config.

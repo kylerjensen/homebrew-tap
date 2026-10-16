@@ -8,12 +8,17 @@ class Litellm < Formula
     root_url "https://ghcr.io/v2/kylerjensen/tap"
   end
 
+  # macOS only: this tap ships macOS installs by owner decision. litellm
+  # itself runs on Linux, but the manylinux wheel URLs and the Linuxbrew
+  # zlib-linkage workarounds they needed aren't worth maintaining here.
+  depends_on :macos
+
   depends_on "python@3.14"
 
   # Upstream embeds a compiled Rust bridge (litellm/rust_bridge/_native.abi3.so),
   # so building the PyPI sdist from source would drag in a full Rust toolchain.
   # Instead install upstream's prebuilt cp310-abi3 platform wheels (stable ABI,
-  # any Python >= 3.10), selected per OS/arch like llama-swap.rb. sha256s are
+  # any Python >= 3.10), selected per arch like llama-swap.rb. sha256s are
   # the PyPI digests. `using: :nounzip` keeps the .whl staged as a plain file:
   # Homebrew would otherwise unzip it (zip magic) and pip needs the real wheel.
   on_macos do
@@ -24,17 +29,6 @@ class Litellm < Formula
     on_intel do
       url "https://files.pythonhosted.org/packages/d7/71/72b0e4c54a8fb0e10a35adb611f2f03febc27ac4fdf9b372c4f4a7d53442/litellm-#{version}-cp310-abi3-macosx_10_12_x86_64.whl", using: :nounzip
       sha256 "633886584ffb6421485349376f2c1666d4854fecc3ab8b1cdb24537817d4e1cc"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://files.pythonhosted.org/packages/75/05/52960a61798299aaf333d0010d1010a55099aa22bdedea3958672a4ce571/litellm-#{version}-cp310-abi3-manylinux_2_28_aarch64.whl", using: :nounzip
-      sha256 "beb5044645144308b39560049c0f68875ad7de07e681ad0b73e2bc6c3705ba61"
-    end
-    on_intel do
-      url "https://files.pythonhosted.org/packages/07/1d/44e5c54df750ccb610285c778f92651794534a480dcce730eaf9d0aa8b31/litellm-#{version}-cp310-abi3-manylinux_2_28_x86_64.whl", using: :nounzip
-      sha256 "f3d743c2d274c6537f7341213607c927c486676012a9d94412a8a8ccbe2f51f1"
     end
   end
 
@@ -71,22 +65,18 @@ class Litellm < Formula
     # existing buffer, and exempt under preserve_rpath. Re-sign each file
     # afterwards, since the edit invalidates the ad-hoc signature. Runtime is
     # unaffected: the stack is resolved purely through @loader_path
-    # references, and Python loads it by file path, never by Mach-O ID. No
-    # Linux counterpart needed: Homebrew's fix_dynamic_linkage there only
-    # relativizes prefix symlinks and never rewrites ELF names.
-    if OS.mac?
-      require "macho"
-      site_pkg = Dir["#{libexec}/venv/lib/python3.*/site-packages"].first
-      dylib_dir = "#{site_pkg}/psycopg_binary/.dylibs" if site_pkg
-      if dylib_dir && File.directory?(dylib_dir)
-        Dir["#{dylib_dir}/*"].each do |dylib|
-          macho_file = MachO.open(dylib)
-          next unless macho_file.dylib?
+    # references, and Python loads it by file path, never by Mach-O ID.
+    require "macho"
+    site_pkg = Dir["#{libexec}/venv/lib/python3.*/site-packages"].first
+    dylib_dir = "#{site_pkg}/psycopg_binary/.dylibs" if site_pkg
+    if dylib_dir && File.directory?(dylib_dir)
+      Dir["#{dylib_dir}/*"].each do |dylib|
+        macho_file = MachO.open(dylib)
+        next unless macho_file.dylib?
 
-          macho_file.change_dylib_id("@rpath/#{File.basename(dylib)}")
-          macho_file.write!
-          system "codesign", "--force", "--sign", "-", dylib
-        end
+        macho_file.change_dylib_id("@rpath/#{File.basename(dylib)}")
+        macho_file.write!
+        system "codesign", "--force", "--sign", "-", dylib
       end
     end
 
@@ -95,8 +85,8 @@ class Litellm < Formula
     # Two reasons this has to happen here: (1) litellm's own import-time
     # load_dotenv() resolves relative to the calling module's directory
     # (site-packages), never the user's cwd or home, so it can't find this
-    # file; (2) brew services generates a launchd plist/systemd unit with no
-    # user-injectable environment. The file is parsed with python-dotenv
+    # file; (2) brew services generates a launchd plist with no user-
+    # injectable environment. The file is parsed with python-dotenv
     # (already a litellm dependency) instead of bash `source`, so values
     # containing `$`, spaces, or quotes survive verbatim, matching how
     # litellm itself reads .env files.
@@ -127,8 +117,8 @@ class Litellm < Formula
     # LITELLM_MASTER_KEY from ~/.litellm/.env, both created by the user first
     # (see caveats), same as llama-swap/olla. Dir.home resolves to
     # the installing user's home at formula-eval time -- "~" is not expanded
-    # inside the generated launchd plist/systemd unit, so an absolute path is
-    # required. Bind to loopback only by default: litellm's own default is
+    # inside the generated launchd plist, so an absolute path is required.
+    # Bind to loopback only by default: litellm's own default is
     # 0.0.0.0:4000 (all interfaces), which this tap deliberately narrows for a
     # single-user Homebrew install. Widen it by editing the --host value.
     run [opt_bin/"litellm", "--config", "#{Dir.home}/.litellm/config.yaml", "--host", "127.0.0.1", "--port", "4000"]

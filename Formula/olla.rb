@@ -21,7 +21,7 @@ class Olla < Formula
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
     rebuild 1
-    sha256 cellar: :any_skip_relocation, arm64_tahoe: "650e01fb7d31da7fb6115331aa1b6d8f6e4c94f717db90f7b79b80944206dae9"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "3454f5488f3ab949d4c47c83ba5fe17f59a8257f8ebc8c2d6f1a31c0c11be025"
   end
 
   # macOS only: the tap ships macOS installs by owner decision. olla is

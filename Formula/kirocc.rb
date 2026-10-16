@@ -24,7 +24,7 @@ class Kirocc < Formula
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
     rebuild 1
-    sha256 cellar: :any_skip_relocation, arm64_tahoe: "f686a1e494bd76ef51e18de9f216158785faffac53177bd02279909a531f5c36"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "c8682853d8d3edbf18a9f6d4e57ed3b37650cf156400e94f4bd7981322cad9fd"
   end
 
   depends_on "go" => :build

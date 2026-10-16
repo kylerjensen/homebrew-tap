@@ -60,6 +60,26 @@ To save CI time, the `test-bot` job skips the from-source rebuild when a bottle 
 
 Because the version is a bare integer and the only required source change is `version` + the four checksums, this is a mechanical, well-specified bump: a good candidate to delegate to a cheaper model, with `brew style` + `brew audit --strict --online` + the CI install/test as the backstop. Watch for upstream changing its release-asset naming or adding/removing a platform variant; if that happens the `on_macos`/`on_linux` url/sha structure needs a corresponding edit, which is no longer purely mechanical.
 
+### Periodic version bumps for `litellm`
+
+`litellm` tracks upstream's PyPI releases (BerriAI/litellm ships frequent `1.x.y` versions). There is no autobump or livecheck wired up, so bumps are manual. (There is deliberately no `livecheck` block: `Livecheck::Strategy::Pypi` derives the package name from the URL basename, and the hyphens in the `cp310-abi3` wheel tag make it query a 404ing name.) To bump:
+
+1. Fetch the latest version plus the per-platform `cp310-abi3` wheel URLs and sha256s from the PyPI JSON:
+   ```bash
+   curl -sL https://pypi.org/pypi/litellm/json | python3 -c "
+   import json, sys
+   d = json.load(sys.stdin)
+   print(d['info']['version'])
+   for u in d['urls']:
+       if 'cp310-abi3' in u['filename'] and u['filename'].endswith('.whl'):
+           print(u['filename'], u['url'], u['digests']['sha256'])
+   "
+   ```
+2. In [Formula/litellm.rb](Formula/litellm.rb), bump `version` and replace each of the four `url` lines: the `/packages/<hash>/` path segment is a per-file PyPI storage hash that does NOT interpolate, so copy it from the JSON output (only the `litellm-#{version}-cp310-abi3-...` filename part updates automatically). Replace the four `sha256` lines (the PyPI digests). Leave the `bottle do` `root_url` as-is; CI clobbers the bottle sha256s.
+3. Follow the normal shipping flow above (branch, PR, CI builds + publishes bottles, merge).
+
+This is semi-mechanical (the four `macosx_*` / `manylinux_2_28_*` filenames must be matched to the `on_macos`/`on_linux` + `on_arm`/`on_intel` slots by hand), with `brew style` + `brew audit --strict --online` + the CI install/test as the backstop. Watch for upstream changing its wheel platform tags (a new `manylinux` baseline, a different macOS deployment target) or dropping a platform variant; if that happens the `on_macos`/`on_linux` url/sha structure needs a corresponding edit. Also watch the `[proxy]` extra's native dependency tree: the install-time Mach-O fix-up in the formula rewrites the dylib IDs bundled by `psycopg-binary`, so a version that changes that bundle (new/renamed `.dylibs`, or non-`@rpath` IDs elsewhere) may need the fix-up adjusted.
+
 ### Bottle hosting (GitHub Packages / GHCR)
 
 Bottles are published to GitHub Packages (GHCR) at `ghcr.io/v2/kylerjensen/tap`, not to GitHub Releases. This is the only Homebrew-supported way to serve bottles that keep working when the tap repo is private: a plain `github.com/.../releases/download/...` URL always resolves to the default unauthenticated `CurlDownloadStrategy` (no `Authorization` header is ever injected, so a private repo 404s), whereas any `ghcr.io/v2/...` URL is auto-detected as the bearer-auth-aware `CurlGitHubPackagesDownloadStrategy`. See issue #13 for the full diagnosis.
@@ -85,6 +105,7 @@ Recurring patterns across formulae in this tap:
 - **Runtime credential/config auto-detection**: formulae that need to discover user credentials at *service start time* (not install time) do so from the launcher script itself, because Homebrew's build sandbox denies filesystem reads outside a fixed allowlist during `install`/`post_install` — see the kiro-gateway launcher script and its `post_install` `.env` handling.
 - **Pinning fork commits over tags**: when tracking a fork's `main` branch instead of upstream's tagged releases (because needed fixes land ahead of upstream tags), pin the `url` to a specific commit SHA (not `refs/heads/main`) so the tarball and its `sha256` stay reproducible.
 - **Prebuilt per-platform release binaries** (e.g. [llama-swap.rb](Formula/llama-swap.rb)): when upstream publishes ready-to-run per-OS/per-arch release tarballs, select the archive with `on_macos`/`on_linux` + `on_arm`/`on_intel` and a `sha256` per variant (from upstream's `*_checksums.txt`) rather than building from source. Keep the `bottle do` block with the GHCR `root_url` so CI still bottles the unpacked binary and private-repo users get a working `brew install`.
+- **Prebuilt PyPI platform wheels** (e.g. [litellm.rb](Formula/litellm.rb)): for a regular PyPI package that ships per-OS/per-arch wheels, select the wheel with `on_macos`/`on_linux` + `on_arm`/`on_intel` and `using: :nounzip` (Homebrew would otherwise unzip it on zip magic detection, and pip needs the real wheel file), then `pip install` the wheel plus its extras into a `libexec` venv so pip resolves the remaining deps from PyPI at build time. sha256s are the PyPI digests. `preserve_rpath` is needed for the linker-signed native extensions, and a macOS-only in-`install` `ruby-macho` fix-up rewrites the install names of bundled dep dylibs whose IDs are non-`@rpath` absolute paths (Homebrew's install-name relocation overflows their name buffers and aborts the install).
 - **`service do` blocks**: formulae exposing a long-running process define a `brew services`-compatible service block (`run`, `keep_alive`, `log_path`/`error_log_path`, `working_dir`) rather than expecting users to run the binary manually.
 - **Security-conscious defaults in `caveats`**: formulae that bind to network ports document that they default to loopback-only and explain when/why to set an API key or widen the bind host.
 - **`test do` blocks avoid touching `$HOME` or real network/service state** — they assert against `--help`/`--version` output or deterministic early-exit error messages (e.g. missing-credentials validation) rather than exercising real functionality that would mutate user state.
@@ -95,6 +116,7 @@ Recurring patterns across formulae in this tap:
 - [Formula/kiro-gateway.rb](Formula/kiro-gateway.rb) — OpenAI/Anthropic-compatible proxy gateway for Kiro (kylerjensen fork); vendored Python source + private venv, tracks fork's `main` via pinned commit SHA, `brew services`-compatible.
 - [Formula/icloud-sync.rb](Formula/icloud-sync.rb) — symlinks `$HOME` directories into iCloud Drive; macOS-only, wraps a pre-bundled Node ESM script.
 - [Formula/llama-swap.rb](Formula/llama-swap.rb) — proxy server for swapping models on llama.cpp; prebuilt per-OS/per-arch upstream release binaries, `brew services`-compatible (requires a user-created `~/.llama-swap/config.yaml`). Version-bump cadence below.
+- [Formula/litellm.rb](Formula/litellm.rb) — OpenAI-compatible proxy gateway for 100+ LLM providers (BerriAI/litellm); prebuilt PyPI wheels + private venv, `brew services`-compatible (requires a user-created `~/.litellm/config.yaml` and a `LITELLM_MASTER_KEY` in `~/.litellm/.env`; UI mode additionally requires Postgres). Version-bump cadence below.
 - [Formula/olla.rb](Formula/olla.rb) — proxy and load balancer for self-hosted LLM inference (Ollama, vLLM, llama.cpp, ...); prebuilt per-OS/per-arch upstream release binaries, `brew services`-compatible (reads a user-created `~/.olla/config.yaml`).
 - [Casks/omlx-app.rb](Casks/omlx-app.rb) — menu bar app cask for the oMLX LLM inference server; per-OS-version download variants, arm64-only.
 

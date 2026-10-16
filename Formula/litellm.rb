@@ -34,6 +34,8 @@ class Litellm < Formula
   # zlib-linkage workarounds they needed aren't worth maintaining here.
   depends_on :macos
 
+  depends_on "postgresql"
+
   depends_on "python@3.14"
 
   # The Intel wheel overrides the top-level arm64 `url` above. The override
@@ -123,6 +125,110 @@ class Litellm < Formula
 
       exec "#{libexec}/venv/bin/litellm" "$@"
     EOS
+
+    # Setup script to initialize PostgreSQL, create the litellm database, and
+    # write ~/.litellm/.env (DATABASE_URL + LITELLM_MASTER_KEY). This handles
+    # the full PostgreSQL lifecycle (init db, start, create db, write .env,
+    # stop) so the user can get started with one command after install. Safe
+    # to re-run at any time.
+    (bin/"litellm-setup").write <<~'EOS'
+      #!/bin/bash
+      # Initialize litellm's PostgreSQL database and ~/.litellm/.env file.
+      # Run once after `brew install`. Safe to re-run at any time.
+      #
+      # This script:
+      #   - Locates PostgreSQL from Homebrew (postgresql, postgresql@18, or
+      #     postgresql@17)
+      #   - Initializes the PostgreSQL data directory (if needed)
+      #   - Starts PostgreSQL, creates the `litellm` database, writes
+      #     ~/.litellm/.env with DATABASE_URL and LITELLM_MASTER_KEY
+      #   - Stops PostgreSQL back down
+
+      set -euo pipefail
+
+      # Locate PostgreSQL (try common taps)
+      PG=""
+      for f in postgresql postgresql@18 postgresql@17; do
+        PG=$(brew --prefix "$f" 2>/dev/null)
+        if [ -d "$PG/bin" ]; then
+          break
+        fi
+        PG=""
+      done
+      if [ -z "$PG" ] || [ ! -d "$PG/bin" ]; then
+        echo "Error: no PostgreSQL found via Homebrew."
+        echo "  Install one: brew install postgresql | postgresql@18 | postgresql@17"
+        exit 1
+      fi
+
+      # Find the data directory (check common locations)
+      DATA=""
+      for d in "$PG/var/postgres" "/var/db/postgres/defaultserver"; do
+        if [ -d "$d" ] && [ -f "$d/PG_VERSION" ]; then
+          DATA="$d"
+          break
+        fi
+      done
+
+      # If no data dir found, create and initialize one
+      if [ -z "$DATA" ]; then
+        DATA="$PG/var/postgres"
+        mkdir -p "$DATA"
+        echo "  Initializing data directory at $DATA..."
+        "$PG/bin/initdb" -D "$DATA" 2>&1 | tail -1
+      fi
+
+      # Whoami for the database connection
+      USR="$(whoami)"
+
+      # Start PostgreSQL (only if no one else has it running)
+      STARTED=0
+      if ! pgrep -x postgres >/dev/null 2>&1; then
+        echo "Starting PostgreSQL..."
+        "$PG/bin/pg_ctl" start -D "$DATA" -l "$DATA/log" -w 30
+        STARTED=1
+      fi
+
+      # Create the litellm database (idempotent)
+      echo "Setting up litellm database..."
+      "$PG/bin/createdb" -U "$USR" litellm 2>/dev/null || \
+        echo "  Database already exists."
+
+      # Write .env file (add or update DATABASE_URL, preserve/generate
+      # LITELLM_MASTER_KEY)
+      mkdir -p "$HOME/.litellm"
+      ENV_FILE="$HOME/.litellm/.env"
+      [ -f "$ENV_FILE" ] || touch "$ENV_FILE"
+
+      # Preserve existing master key or generate a new one
+      if grep -q '^LITELLM_MASTER_KEY=' "$ENV_FILE" 2>/dev/null; then
+        echo "  Master key preserved."
+      else
+        echo "  Generating new master key..."
+        echo "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 32)" >> "$ENV_FILE"
+      fi
+
+      # Write DATABASE_URL (add or update)
+      if grep -q '^DATABASE_URL=' "$ENV_FILE" 2>/dev/null; then
+        sed -i '' 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://localhost:5432/litellm|' "$ENV_FILE" 2>/dev/null || \
+        sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://localhost:5432/litellm|' "$ENV_FILE"
+      else
+        echo "DATABASE_URL=postgresql://localhost:5432/litellm" >> "$ENV_FILE"
+      fi
+      chmod 600 "$ENV_FILE"
+
+      # Stop PostgreSQL only if we started it
+      if [ "$STARTED" = "1" ]; then
+        echo "Stopping PostgreSQL..."
+        "$PG/bin/pg_ctl" stop -D "$DATA" -m fast
+      fi
+
+      echo ""
+      echo "litellm setup complete!"
+      echo "  Next steps:"
+      echo "  1. Create a config.yaml at ~/.litellm/config.yaml (or use UI mode)"
+      echo "  2. Start the service: brew services start litellm"
+    EOS
   end
 
   service do
@@ -170,14 +276,13 @@ class Litellm < Formula
       The proxy serves an OpenAI-compatible API at http://127.0.0.1:4000.
 
       UI mode (manage models, keys, and budgets in a web UI instead of YAML)
-      additionally requires a Postgres database:
-        brew install postgresql@18
-        brew services start postgresql@18
-        $(brew --prefix postgresql@18)/bin/createdb litellm
-      then add to ~/.litellm/.env:
-        DATABASE_URL=postgresql://<your username>@localhost:5432/litellm
-      use a config.yaml containing just `model_list: []`, start the service,
-      and open http://127.0.0.1:4000/ui (log in with the master key).
+      requires a PostgreSQL database:
+        litellm-setup
+      This installs PostgreSQL, initializes the database, writes
+      ~/.litellm/.env (DATABASE_URL + LITELLM_MASTER_KEY), and stops the
+      server back down. Then use a config.yaml containing just
+      `model_list: []`, start the service, and open
+      http://127.0.0.1:4000/ui (log in with the master key).
 
       Security:
         The bundled service binds to 127.0.0.1:4000 only; litellm's own default

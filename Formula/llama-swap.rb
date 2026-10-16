@@ -1,7 +1,28 @@
 class LlamaSwap < Formula
   desc "Proxy server for swapping models on llama.cpp"
   homepage "https://github.com/mostlygeek/llama-swap"
+
+  # Upstream ships prebuilt, per-arch release tarballs (no `go build` from
+  # source needed), so select the right darwin archive by CPU rather than
+  # vendoring + compiling. sha256s are the upstream release checksums
+  # (llama-swap_<version>_checksums.txt). CI still bottles whatever `install`
+  # lays down and publishes it to GHCR (see the bottle block + CLAUDE.md), so
+  # private-repo users get a working `brew install` without re-fetching the
+  # GitHub release.
+  # The arm64 archive is the top-level `url` and only the Intel one sits in an
+  # `on_macos` block (see below): `brew test-bot --only-tap-syntax` runs
+  # `brew readall`, which loads every formula under a Linux tag too and fails
+  # with "formula requires at least a URL" if every `url` hides behind
+  # `on_macos`, and `brew style` rejects `url` inside a top-level
+  # `on_arm`/`on_intel` block. `depends_on :macos` keeps the Linux evaluation
+  # from ever installing anything.
+  # The version is spelled out in the URL (not `#{version}`) because
+  # `brew style` requires `url` before `version`, and the interpolation would
+  # be empty at that point; the `on_intel` override below (evaluated after the
+  # `version` line) does interpolate.
+  url "https://github.com/mostlygeek/llama-swap/releases/download/v264/llama-swap_264_darwin_arm64.tar.gz"
   version "264"
+  sha256 "a0beb847db08945dcabe5ee6a9ae7a18876be24d159eaf775679f11a453526dd"
   license "MIT"
 
   bottle do
@@ -14,18 +35,11 @@ class LlamaSwap < Formula
   # cross-platform upstream, but Linux archives aren't fetched or tested here.
   depends_on :macos
 
-  # Upstream ships prebuilt, per-arch release tarballs (no `go build` from
-  # source needed), so select the right darwin archive by CPU rather than
-  # vendoring + compiling. sha256s are the upstream release checksums
-  # (llama-swap_<version>_checksums.txt). CI still bottles whatever `install`
-  # lays down and publishes it to GHCR (see the bottle block + CLAUDE.md), so
-  # private-repo users get a working `brew install` without re-fetching the
-  # GitHub release.
+  # The Intel archive overrides the top-level arm64 `url` above. The override
+  # must sit inside `on_macos`: `brew style` only allows `url` in arch blocks
+  # nested under an OS block, and a top-level `url` is required for
+  # `brew readall`'s Linux simulation (see the comment above).
   on_macos do
-    on_arm do
-      url "https://github.com/mostlygeek/llama-swap/releases/download/v#{version}/llama-swap_#{version}_darwin_arm64.tar.gz"
-      sha256 "a0beb847db08945dcabe5ee6a9ae7a18876be24d159eaf775679f11a453526dd"
-    end
     on_intel do
       url "https://github.com/mostlygeek/llama-swap/releases/download/v#{version}/llama-swap_#{version}_darwin_amd64.tar.gz"
       sha256 "8a68d20330df73a71a91bbd9e90ab3cf88ff28cc99df1cfe0026eb1354078de8"

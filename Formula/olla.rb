@@ -1,13 +1,22 @@
 class Olla < Formula
   desc "Proxy and load balancer for self-hosted LLM inference backends"
   homepage "https://github.com/thushan/olla"
-  license "Apache-2.0"
 
   # No explicit `version`: Homebrew scans it (0.0.29) from the release URL below,
   # and `brew audit` flags a declared version that duplicates the URL-scanned one
   # (this is why llama-swap, whose bare-integer version is NOT cleanly scannable
   # from its URL, does declare one). Bump by editing the v0.0.29 / olla_v0.0.29_
   # literals in each URL below; the detected version follows automatically.
+  # The arm64 archive is the top-level `url` and only the Intel one sits in an
+  # `on_macos` block (see below): `brew test-bot --only-tap-syntax` runs
+  # `brew readall`, which loads every formula under a Linux tag too and fails
+  # with "formula requires at least a URL" if every `url` hides behind
+  # `on_macos`, and `brew style` rejects `url` inside a top-level
+  # `on_arm`/`on_intel` block. `depends_on :macos` keeps the Linux evaluation
+  # from ever installing anything.
+  url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_arm64.zip"
+  sha256 "a879d1247090b3d85a774e0890241234b7055ec87904292313ea42c6ce7fe0b4"
+  license "Apache-2.0"
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
@@ -22,15 +31,13 @@ class Olla < Formula
   # Upstream ships prebuilt, per-arch release archives via goreleaser (no
   # `go build` needed), so select the right darwin .zip by CPU rather than
   # vendoring + compiling. The source sha256s are the upstream release
-  # checksums (checksums.txt). CI still
-  # bottles whatever `install` lays down and publishes it to GHCR (see the
-  # bottle block + CLAUDE.md), so private-repo users get a working `brew install`
-  # without re-fetching the GitHub release.
+  # checksums (checksums.txt). CI still bottles whatever `install` lays down
+  # and publishes it to GHCR (see the bottle block + CLAUDE.md), so
+  # private-repo users get a working `brew install` without re-fetching the
+  # GitHub release. The Intel archive overrides the top-level arm64 `url`
+  # above, from inside `on_macos` (the one place `brew style` allows an
+  # arch-conditional `url`).
   on_macos do
-    on_arm do
-      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_arm64.zip"
-      sha256 "a879d1247090b3d85a774e0890241234b7055ec87904292313ea42c6ce7fe0b4"
-    end
     on_intel do
       url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_amd64.zip"
       sha256 "b70b6bdcb9b182ed2019bb2634f7752feb6c7c316df938cf2a1b679d8f5ba464"

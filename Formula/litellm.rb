@@ -1,7 +1,27 @@
 class Litellm < Formula
   desc "OpenAI-compatible proxy server and gateway for 100+ LLM providers"
   homepage "https://litellm.ai"
+
+  # Upstream embeds a compiled Rust bridge (litellm/rust_bridge/_native.abi3.so),
+  # so building the PyPI sdist from source would drag in a full Rust toolchain.
+  # Instead install upstream's prebuilt cp310-abi3 platform wheels (stable ABI,
+  # any Python >= 3.10), selected per arch like llama-swap.rb. sha256s are
+  # the PyPI digests. `using: :nounzip` keeps the .whl staged as a plain file:
+  # Homebrew would otherwise unzip it (zip magic) and pip needs the real wheel.
+  # The arm64 wheel is the top-level `url` and only the Intel one sits in an
+  # `on_macos` block (see below): `brew test-bot --only-tap-syntax` runs
+  # `brew readall`, which loads every formula under a Linux tag too and fails
+  # with "formula requires at least a URL" if every `url` hides behind
+  # `on_macos`, and `brew style` rejects `url` inside a top-level
+  # `on_arm`/`on_intel` block. `depends_on :macos` keeps the Linux evaluation
+  # from ever installing anything.
+  # The version is spelled out in the URL (not `#{version}`) because
+  # `brew style` requires `url` before `version`, and the interpolation would
+  # be empty at that point; the `on_intel` override below (evaluated after the
+  # `version` line) does interpolate.
+  url "https://files.pythonhosted.org/packages/40/3b/a060486a4cb637d2aff7bedd2d9bdd807793cf8820153bca74fd14d7cbd4/litellm-1.105.1-cp310-abi3-macosx_11_0_arm64.whl", using: :nounzip
   version "1.105.1"
+  sha256 "3253da7d4967e367fb7e4e404b598a26037c45ba6d67a79356a81d3f8b9f9f3a"
   license "MIT"
 
   bottle do
@@ -15,17 +35,11 @@ class Litellm < Formula
 
   depends_on "python@3.14"
 
-  # Upstream embeds a compiled Rust bridge (litellm/rust_bridge/_native.abi3.so),
-  # so building the PyPI sdist from source would drag in a full Rust toolchain.
-  # Instead install upstream's prebuilt cp310-abi3 platform wheels (stable ABI,
-  # any Python >= 3.10), selected per arch like llama-swap.rb. sha256s are
-  # the PyPI digests. `using: :nounzip` keeps the .whl staged as a plain file:
-  # Homebrew would otherwise unzip it (zip magic) and pip needs the real wheel.
+  # The Intel wheel overrides the top-level arm64 `url` above. The override
+  # must sit inside `on_macos`: `brew style` only allows `url` in arch blocks
+  # nested under an OS block, and a top-level `url` is required for
+  # `brew readall`'s Linux simulation (see the comment above).
   on_macos do
-    on_arm do
-      url "https://files.pythonhosted.org/packages/40/3b/a060486a4cb637d2aff7bedd2d9bdd807793cf8820153bca74fd14d7cbd4/litellm-#{version}-cp310-abi3-macosx_11_0_arm64.whl", using: :nounzip
-      sha256 "3253da7d4967e367fb7e4e404b598a26037c45ba6d67a79356a81d3f8b9f9f3a"
-    end
     on_intel do
       url "https://files.pythonhosted.org/packages/d7/71/72b0e4c54a8fb0e10a35adb611f2f03febc27ac4fdf9b372c4f4a7d53442/litellm-#{version}-cp310-abi3-macosx_10_12_x86_64.whl", using: :nounzip
       sha256 "633886584ffb6421485349376f2c1666d4854fecc3ab8b1cdb24537817d4e1cc"

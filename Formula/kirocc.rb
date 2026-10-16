@@ -23,15 +23,19 @@ class Kirocc < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "f686a1e494bd76ef51e18de9f216158785faffac53177bd02279909a531f5c36"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "299b55b1309a4934e2408b912c261f180f06166d6e82faf7b7dd172f06ae1015"
+    rebuild 1
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "6b69a8b55992a04ceeb145693602e6bfc3e6d32a24ec069d85ce1e63f8def6de"
   end
 
   depends_on "go" => :build
 
+  # macOS only: the tap ships macOS installs by owner decision. kirocc's Go
+  # build is cross-platform upstream, but Linux bottles aren't built or tested.
+  depends_on :macos
+
   def install
     # The dependency tree is pure-Go (modernc.org/sqlite), so build with cgo
-    # disabled for reproducible cross-platform bottles with no C toolchain.
+    # disabled for reproducible bottles with no C toolchain.
     ENV["CGO_ENABLED"] = "0"
     system "go", "build", *std_go_args, "./cmd/kirocc"
   end
@@ -70,8 +74,7 @@ class Kirocc < Formula
 
       Credentials:
         Default DB path:
-          macOS: ~/Library/Application Support/kiro-cli/data.sqlite3
-          Linux: ~/.local/share/kiro-cli/data.sqlite3
+          ~/Library/Application Support/kiro-cli/data.sqlite3
 
         If needed, override with:
           kirocc --db '<path-to-data.sqlite3>'

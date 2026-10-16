@@ -1,8 +1,13 @@
 class Olla < Formula
   desc "Proxy and load balancer for self-hosted LLM inference backends"
   homepage "https://github.com/thushan/olla"
-  version "0.0.29"
   license "Apache-2.0"
+
+  # No explicit `version`: Homebrew scans it (0.0.29) from the release URL below,
+  # and `brew audit` flags a declared version that duplicates the URL-scanned one
+  # (this is why llama-swap, whose bare-integer version is NOT cleanly scannable
+  # from its URL, does declare one). Bump by editing the v0.0.29 / olla_v0.0.29_
+  # literals in each URL below; the detected version follows automatically.
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
@@ -19,22 +24,22 @@ class Olla < Formula
   # without re-fetching the GitHub release.
   on_macos do
     on_arm do
-      url "https://github.com/thushan/olla/releases/download/v#{version}/olla_v#{version}_macos_arm64.zip"
+      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_arm64.zip"
       sha256 "a879d1247090b3d85a774e0890241234b7055ec87904292313ea42c6ce7fe0b4"
     end
     on_intel do
-      url "https://github.com/thushan/olla/releases/download/v#{version}/olla_v#{version}_macos_amd64.zip"
+      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_amd64.zip"
       sha256 "b70b6bdcb9b182ed2019bb2634f7752feb6c7c316df938cf2a1b679d8f5ba464"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/thushan/olla/releases/download/v#{version}/olla_v#{version}_linux_arm64.tar.gz"
+      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_linux_arm64.tar.gz"
       sha256 "7a632ba3bf53a1b37b9de57d7d472099134c96f0d0b6f644379012e57c8efda7"
     end
     on_intel do
-      url "https://github.com/thushan/olla/releases/download/v#{version}/olla_v#{version}_linux_amd64.tar.gz"
+      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_linux_amd64.tar.gz"
       sha256 "fafb482e50def1f56f210ef28b46c67021bb6e25b0ff0a595682e2aac214fcc4"
     end
   end
@@ -48,12 +53,12 @@ class Olla < Formula
   end
 
   service do
-    # ola is configless-until-configured like llama-swap: with no config it starts
+    # olla is configless-until-configured like llama-swap: with no config it starts
     # but routes nothing, so the service points it at ~/.olla/config.yaml, which
     # the user must create first (see caveats). Dir.home resolves to the
     # installing user's home at formula-eval time -- "~" is not expanded inside
     # the generated launchd plist/systemd unit, so an absolute path is required.
-    # working_dir is the same dir so ola's relative ./logs (it MkdirAll's it)
+    # working_dir is the same dir so olla's relative ./logs (it MkdirAll's it)
     # stays under the user's home. It binds to localhost:40114 by default
     # (loopback only); widen it by setting server.host in the config.
     run [opt_bin/"olla", "--config", "#{Dir.home}/.olla/config.yaml"]
@@ -65,7 +70,7 @@ class Olla < Formula
 
   def caveats
     <<~EOS
-      ola reads a YAML config and will not route any traffic without at least one
+      olla reads a YAML config and will not route any traffic without at least one
       backend endpoint defined in it. Before starting the service, create the
       directory and a config file at:
         ~/.olla/config.yaml
@@ -92,21 +97,21 @@ class Olla < Formula
         https://github.com/thushan/olla/blob/main/config/config.yaml
         https://thushan.github.io/olla/configuration/overview/
 
-      ola exposes an OpenAI-compatible API at http://localhost:40114/olla/proxy/
+      olla exposes an OpenAI-compatible API at http://localhost:40114/olla/proxy/
       and an Anthropic Messages API at http://localhost:40114/olla/anthropic/.
 
       Security:
-        By default ola listens on localhost:40114 (loopback only). To expose it on
+        By default olla listens on localhost:40114 (loopback only). To expose it on
         the network, set server.host: "0.0.0.0" in your config; there is no
         built-in API auth, so keep it to a trusted network if you do.
 
       Homebrew service:
-        brew services start ola
-        brew services info ola
-        brew services stop ola
+        brew services start olla
+        brew services info olla
+        brew services stop olla
 
       Running manually (any host/port you choose in the config):
-        ola --config ~/.olla/config.yaml
+        olla --config ~/.olla/config.yaml
     EOS
   end
 

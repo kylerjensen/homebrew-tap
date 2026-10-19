@@ -70,7 +70,13 @@ class Litellm < Formula
     # metadata declares.
     system formula_opt_bin("python@3.14")/"python3.14", "-m", "venv", libexec/"venv"
     wheel = Dir["litellm-*.whl"].fetch(0)
-    system libexec/"venv/bin/pip", "install", "--no-cache-dir", "./#{wheel}[proxy]"
+    # The wheel's `extra_proxy` extra is what UI/DB mode needs at runtime: the
+    # proxy imports `prisma` whenever DATABASE_URL is set, and dies with
+    # ModuleNotFoundError without it. That extra also carries KMS/email/redis
+    # packages this tap doesn't need, and psycopg is already pulled in via
+    # [proxy] (litellm-proxy-extras), so install prisma directly, at the same
+    # range the wheel metadata declares for it.
+    system libexec/"venv/bin/pip", "install", "--no-cache-dir", "./#{wheel}[proxy]", "prisma>=0.11.0,<1.0"
 
     # psycopg-binary (pulled in via the [proxy] extra, through litellm-proxy-
     # extras) bundles a self-contained libpq/OpenSSL/krb5/LDAP stack in
@@ -117,8 +123,11 @@ class Litellm < Formula
       # dependency if nothing is listening yet, running initdb first if the
       # data directory has never been created), creates the `litellm`
       # database, and writes DATABASE_URL plus a generated
-      # LITELLM_MASTER_KEY into ~/.litellm/.env. A server this command
-      # started itself gets stopped again on the way out. Safe to re-run.
+      # LITELLM_MASTER_KEY into ~/.litellm/.env. The URL embeds the current
+      # user (Prisma's engine sends it verbatim and fails with P1010 "User ``
+      # denied" on a scheme+host-only URL), and generates the Prisma client
+      # the proxy imports at startup. A server this command started itself
+      # gets stopped again on the way out. Safe to re-run.
       if [ "${1:-}" = "init" ]; then
         PG=""
         for f in postgresql postgresql@18 postgresql@17; do
@@ -162,11 +171,30 @@ class Litellm < Formula
         grep -q '^LITELLM_MASTER_KEY=' "$env_file" || \
           echo "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 32)" >> "$env_file"
         if grep -q '^DATABASE_URL=' "$env_file"; then
-          sed -i '' "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://localhost:5432/litellm|" "$env_file"
+          sed -i '' "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://$(whoami)@localhost:5432/litellm|" "$env_file"
         else
-          echo "DATABASE_URL=postgresql://localhost:5432/litellm" >> "$env_file"
+          echo "DATABASE_URL=postgresql://$(whoami)@localhost:5432/litellm" >> "$env_file"
         fi
         chmod 600 "$env_file"
+
+        # Upstream's Docker image bakes `prisma generate` into the build; the
+        # pip-installed proxy does not, and without the generated client the
+        # proxy starts, errors with "Unable to find Prisma binaries", and
+        # exits. The generator shells out to `prisma-client-py`, so the venv's
+        # bin dir must be on PATH; engine binaries download into ~/.cache on
+        # first run. Re-run on every init (cheap) so an upgraded keg
+        # self-heals.
+        echo "generating Prisma client"
+        SP=""
+        for d in "#{libexec}"/venv/lib/python3.*/site-packages; do
+          if [ -d "$d" ]; then SP="$d"; break; fi
+        done
+        if [ -f "$SP/litellm/proxy/schema.prisma" ]; then
+          PATH="#{libexec}/venv/bin:$PATH" "#{libexec}/venv/bin/prisma" generate \
+            --schema="$SP/litellm/proxy/schema.prisma" >/dev/null
+        else
+          echo "warning: prisma schema not found under $SP; skipped generate" >&2
+        fi
 
         if [ "$STARTED" = "1" ]; then
           "$PG/bin/pg_ctl" -D "$DATA" -m fast stop >/dev/null
@@ -243,7 +271,10 @@ class Litellm < Formula
       the `litellm` database, and writes ~/.litellm/.env (DATABASE_URL +
       LITELLM_MASTER_KEY). Then use a config.yaml containing just
       `model_list: []`, start the service, and open
-      http://127.0.0.1:4000/ui (log in with the master key).
+      http://127.0.0.1:4000/ui (log in with the master key). `litellm init`
+      also generates the Prisma client and (on first run only) downloads
+      Prisma's engine binaries into ~/.cache; re-run it after any version
+      upgrade so the new keg gets a freshly generated client.
 
       Security:
         The bundled service binds to 127.0.0.1:4000 only; litellm's own default

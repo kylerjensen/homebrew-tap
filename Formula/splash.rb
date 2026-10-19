@@ -64,9 +64,47 @@ class Splash < Formula
       exec "#{opt_libexec}/python/bin/python3" -u "#{opt_libexec}/install/launcher.py" "$@"
     SH
     chmod 0755, bin/"splash"
+
+    # The service's entry point. A persistent server is what JIT mode is for,
+    # so it serves every installed model, loading the one each request names.
+    # launchd's plist takes a fixed argv, so extra `splash serve` options (a
+    # port, an API key, a TTL) come from a file the user owns, read at each
+    # start: one argument per line, `#` comments and blank lines skipped. It
+    # lives under the user's home because Homebrew's build sandbox cannot
+    # write there and upgrades must not replace it. An API key comes from a
+    # file of its own into SPLASH_API_KEY, never the argv, where `ps` shows
+    # it to every user; Splash reads the key from that variable for the same
+    # reason.
+    (libexec/"splash-service").write <<~SH
+      #!/bin/sh
+      config="${SPLASH_SERVICE_CONFIG:-$HOME/.config/splash}"
+      if [ -f "$config/api-key" ]; then
+        SPLASH_API_KEY="$(cat "$config/api-key")"
+        export SPLASH_API_KEY
+      fi
+      args_file="$config/service-args"
+      set --
+      if [ -f "$args_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+          case "$line" in ""|"#"*) continue ;; esac
+          set -- "$@" "$line"
+        done < "$args_file"
+      fi
+      exec "#{opt_bin}/splash" serve --all-models "$@"
+    SH
+    chmod 0755, libexec/"splash-service"
+
     zsh_completion.install_symlink libexec/"install/completions/_splash"
     bash_completion.install_symlink libexec/"install/completions/splash.bash" => "splash"
     fish_completion.install_symlink libexec/"install/completions/splash.fish"
+  end
+
+  service do
+    run [opt_libexec/"splash-service"]
+    keep_alive true
+    working_dir Dir.home
+    log_path var/"log/splash.log"
+    error_log_path var/"log/splash.log"
   end
 
   def caveats
@@ -81,10 +119,26 @@ class Splash < Formula
         splash serve --model unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M \\
           --model unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_M
 
+      Homebrew service:
+        The service runs `splash serve --all-models`: every installed model,
+        loaded on demand. Install a model first (serve it once in a terminal),
+        or the service has nothing to serve and keeps restarting.
+          brew services start splash
+          brew services info splash
+          tail -f #{var}/log/splash.log
+        Extra `splash serve` options go in ~/.config/splash/service-args, one
+        argument per line (write --port=8001, not --port 8001), read at each
+        start; restart the service after editing it:
+          --model-ttl=30m
+          --port=8001
+        The service and a `splash serve` in a terminal cannot share a port.
+
       Security:
         The server listens on 127.0.0.1:8000 (loopback only) without
         authentication by default. Before widening it with --host, set
-        --api-key (or SPLASH_API_KEY).
+        --api-key (or SPLASH_API_KEY). For the service, put the key alone in
+        ~/.config/splash/api-key and keep it private (chmod 600); the service
+        passes it in SPLASH_API_KEY, off the command line.
 
       This formula and upstream's incoai/tap/splash both install `splash`.
       If upstream's is installed, remove it first; installed models are kept:
@@ -97,5 +151,6 @@ class Splash < Formula
     # network or ~/Library, so they check the bundled runtime deterministically.
     assert_match version.to_s, shell_output("#{bin}/splash --version")
     assert_match "serve", shell_output("#{bin}/splash --help")
+    assert_predicate libexec/"splash-service", :executable?
   end
 end

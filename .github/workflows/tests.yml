@@ -190,10 +190,12 @@ jobs:
   # check_transition_bottles! re-reads the committed .rb and fails if its
   # bottle metadata doesn't match the uploaded blobs.
   #
-  # The commit in step 3 uses the default GITHUB_TOKEN, so GitHub does NOT
-  # re-trigger a workflow run for it -- this both avoids an infinite loop and
-  # means the committed bottle isn't independently re-verified (it was already
-  # install-tested by test-bot in the build job that produced it). When a
+  # The commit in step 3 carries [skip ci], so GitHub starts no workflow run
+  # for it -- this both avoids an infinite loop and means the committed bottle
+  # isn't independently re-verified (it was already install-tested by test-bot
+  # in the build job that produced it). Pushing with GITHUB_TOKEN alone no
+  # longer does this: since June 2026 a github-actions[bot] push to a PR
+  # starts a pull_request run that waits for a maintainer's approval. When a
   # bottle is already current (e.g. a docs-only push to main), step 2 produces
   # no diff and the job is a no-op.
   publish-bottles:
@@ -282,7 +284,8 @@ jobs:
 
       # Commit the refreshed bottle block in the tapped checkout. No push here;
       # git-try-push below does the race-safe push (rebasing on origin drift).
-      # The commit uses GITHUB_TOKEN, so GitHub does not re-trigger CI for it.
+      # [skip ci] keeps GitHub from starting a run for the commit, which would
+      # wait for approval as a github-actions[bot] push (see above).
       - name: Commit refreshed bottle block
         if: steps.guard.outputs.skip == 'false' && steps.merge.outputs.changed == 'true'
         id: commit
@@ -299,7 +302,7 @@ jobs:
           git config user.name "${GIT_NAME}"
           git config user.email "${GIT_EMAIL}"
           git add Formula Casks
-          git commit -m "Update bottles."
+          git commit -m "Update bottles. [skip ci]"
           echo "committed=true" >> "${GITHUB_OUTPUT}"
 
       # Do NOT pass `token:` here. setup-homebrew already configured a

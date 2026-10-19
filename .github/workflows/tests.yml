@@ -18,12 +18,11 @@ jobs:
         # dependency during only-tap-syntax, and previously, Homebrew no
         # longer bottling openssl@3 for Intel macOS. Not worth carving out
         # exceptions for a runner type that keeps finding new ways to fail.
+        # ubuntu-latest also dropped (Oct 2026): the tap is macOS-only by
+        # owner decision (every formula declares `depends_on :macos`), so
+        # there is nothing left to build or test on Linux.
         os: [ macos-26 ]
-        include:
-          - os: ubuntu-latest
-            container: ghcr.io/homebrew/brew:main
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
     permissions:
       actions: read
       checks: read
@@ -120,7 +119,7 @@ jobs:
           fi
           # GHCR pull credential: base64 of the packages:read GITHUB_TOKEN.
           bearer="$(printf '%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          # This runner's Homebrew bottle tag (e.g. arm64_tahoe, x86_64_linux).
+          # This runner's Homebrew bottle tag (e.g. arm64_tahoe, arm64_sonoma).
           bottle_tag="$(brew ruby -e 'puts Utils::Bottles.tag.to_s')"
           all_exist=true
           for f in ${changed}; do

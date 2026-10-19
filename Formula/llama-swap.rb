@@ -1,41 +1,48 @@
 class LlamaSwap < Formula
   desc "Proxy server for swapping models on llama.cpp"
   homepage "https://github.com/mostlygeek/llama-swap"
-  version "264"
-  license "MIT"
 
-  bottle do
-    root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "36f05331d50913f74dba193060f5a5125d3cfea0702c9af055e8a1c70a9b0eaa"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "d21fbd3515712d24418555c7b1357e75bcd860731ba7cf48ac6eaabc3ade6a80"
-  end
-
-  # Upstream ships prebuilt, per-OS/per-arch release tarballs (no `go build`
-  # from source needed), so select the right archive by platform rather than
+  # Upstream ships prebuilt, per-arch release tarballs (no `go build` from
+  # source needed), so select the right darwin archive by CPU rather than
   # vendoring + compiling. sha256s are the upstream release checksums
   # (llama-swap_<version>_checksums.txt). CI still bottles whatever `install`
   # lays down and publishes it to GHCR (see the bottle block + CLAUDE.md), so
   # private-repo users get a working `brew install` without re-fetching the
   # GitHub release.
+  # The arm64 archive is the top-level `url` and only the Intel one sits in an
+  # `on_macos` block (see below): `brew test-bot --only-tap-syntax` runs
+  # `brew readall`, which loads every formula under a Linux tag too and fails
+  # with "formula requires at least a URL" if every `url` hides behind
+  # `on_macos`, and `brew style` rejects `url` inside a top-level
+  # `on_arm`/`on_intel` block. `depends_on :macos` keeps the Linux evaluation
+  # from ever installing anything.
+  # The version is spelled out in the URL (not `#{version}`) because
+  # `brew style` requires `url` before `version`, and the interpolation would
+  # be empty at that point; the `on_intel` override below (evaluated after the
+  # `version` line) does interpolate.
+  url "https://github.com/mostlygeek/llama-swap/releases/download/v264/llama-swap_264_darwin_arm64.tar.gz"
+  version "264"
+  sha256 "a0beb847db08945dcabe5ee6a9ae7a18876be24d159eaf775679f11a453526dd"
+  license "MIT"
+
+  bottle do
+    root_url "https://ghcr.io/v2/kylerjensen/tap"
+    rebuild 1
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "acb2775629e852312ecd34832d05f871ce2d316efacf17e684654bfcefffb3dd"
+  end
+
+  # macOS only: the tap ships macOS installs by owner decision. llama-swap is
+  # cross-platform upstream, but Linux archives aren't fetched or tested here.
+  depends_on :macos
+
+  # The Intel archive overrides the top-level arm64 `url` above. The override
+  # must sit inside `on_macos`: `brew style` only allows `url` in arch blocks
+  # nested under an OS block, and a top-level `url` is required for
+  # `brew readall`'s Linux simulation (see the comment above).
   on_macos do
-    on_arm do
-      url "https://github.com/mostlygeek/llama-swap/releases/download/v#{version}/llama-swap_#{version}_darwin_arm64.tar.gz"
-      sha256 "a0beb847db08945dcabe5ee6a9ae7a18876be24d159eaf775679f11a453526dd"
-    end
     on_intel do
       url "https://github.com/mostlygeek/llama-swap/releases/download/v#{version}/llama-swap_#{version}_darwin_amd64.tar.gz"
       sha256 "8a68d20330df73a71a91bbd9e90ab3cf88ff28cc99df1cfe0026eb1354078de8"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://github.com/mostlygeek/llama-swap/releases/download/v#{version}/llama-swap_#{version}_linux_arm64.tar.gz"
-      sha256 "cffc26da029d830399d812fa5c9a00fa31bd0967f251eaf07d1270b4f42592ad"
-    end
-    on_intel do
-      url "https://github.com/mostlygeek/llama-swap/releases/download/v#{version}/llama-swap_#{version}_linux_amd64.tar.gz"
-      sha256 "ed3569386f0194401b39732e592b881c72223c8a0a49f6a2e1376f1796e3101d"
     end
   end
 
@@ -52,8 +59,8 @@ class LlamaSwap < Formula
     # -config nor -config-dir is given, so the service cannot be configless; it
     # reads ~/.llama-swap/config.yaml, which the user must create first (see
     # caveats). Dir.home resolves to the installing user's home at formula-eval
-    # time -- "~" is not expanded inside the generated launchd plist/systemd
-    # unit, so an absolute path is required here. Bind to loopback only by
+    # time -- "~" is not expanded inside the generated launchd plist, so an
+    # absolute path is required here. Bind to loopback only by
     # default: the binary's own default is ":8080" (all interfaces), which this
     # tap deliberately narrows for a single-user Homebrew install. Widen it by
     # editing the -listen value.

@@ -1,46 +1,46 @@
 class Olla < Formula
   desc "Proxy and load balancer for self-hosted LLM inference backends"
   homepage "https://github.com/thushan/olla"
-  license "Apache-2.0"
 
   # No explicit `version`: Homebrew scans it (0.0.29) from the release URL below,
   # and `brew audit` flags a declared version that duplicates the URL-scanned one
   # (this is why llama-swap, whose bare-integer version is NOT cleanly scannable
   # from its URL, does declare one). Bump by editing the v0.0.29 / olla_v0.0.29_
   # literals in each URL below; the detected version follows automatically.
+  # The arm64 archive is the top-level `url` and only the Intel one sits in an
+  # `on_macos` block (see below): `brew test-bot --only-tap-syntax` runs
+  # `brew readall`, which loads every formula under a Linux tag too and fails
+  # with "formula requires at least a URL" if every `url` hides behind
+  # `on_macos`, and `brew style` rejects `url` inside a top-level
+  # `on_arm`/`on_intel` block. `depends_on :macos` keeps the Linux evaluation
+  # from ever installing anything.
+  url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_arm64.zip"
+  sha256 "a879d1247090b3d85a774e0890241234b7055ec87904292313ea42c6ce7fe0b4"
+  license "Apache-2.0"
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:  "650e01fb7d31da7fb6115331aa1b6d8f6e4c94f717db90f7b79b80944206dae9"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "ab498205a666445a36238fd217057afeb14b1532c341c297a27982cb167c895f"
+    rebuild 1
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "03ce0a3237606379a52abf95c7e6e2e8fa2d7cd45c74facedd5528ab7c069325"
   end
 
-  # Upstream ships prebuilt, per-OS/per-arch release archives via goreleaser (no
-  # `go build` needed), so select the right archive by platform rather than
-  # vendoring + compiling. macOS archives are .zip; Linux are .tar.gz. The
-  # source sha256s are the upstream release checksums (checksums.txt). CI still
-  # bottles whatever `install` lays down and publishes it to GHCR (see the
-  # bottle block + CLAUDE.md), so private-repo users get a working `brew install`
-  # without re-fetching the GitHub release.
+  # macOS only: the tap ships macOS installs by owner decision. olla is
+  # cross-platform upstream, but Linux archives aren't fetched or tested here.
+  depends_on :macos
+
+  # Upstream ships prebuilt, per-arch release archives via goreleaser (no
+  # `go build` needed), so select the right darwin .zip by CPU rather than
+  # vendoring + compiling. The source sha256s are the upstream release
+  # checksums (checksums.txt). CI still bottles whatever `install` lays down
+  # and publishes it to GHCR (see the bottle block + CLAUDE.md), so
+  # private-repo users get a working `brew install` without re-fetching the
+  # GitHub release. The Intel archive overrides the top-level arm64 `url`
+  # above, from inside `on_macos` (the one place `brew style` allows an
+  # arch-conditional `url`).
   on_macos do
-    on_arm do
-      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_arm64.zip"
-      sha256 "a879d1247090b3d85a774e0890241234b7055ec87904292313ea42c6ce7fe0b4"
-    end
     on_intel do
       url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_macos_amd64.zip"
       sha256 "b70b6bdcb9b182ed2019bb2634f7752feb6c7c316df938cf2a1b679d8f5ba464"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_linux_arm64.tar.gz"
-      sha256 "7a632ba3bf53a1b37b9de57d7d472099134c96f0d0b6f644379012e57c8efda7"
-    end
-    on_intel do
-      url "https://github.com/thushan/olla/releases/download/v0.0.29/olla_v0.0.29_linux_amd64.tar.gz"
-      sha256 "fafb482e50def1f56f210ef28b46c67021bb6e25b0ff0a595682e2aac214fcc4"
     end
   end
 
@@ -57,7 +57,7 @@ class Olla < Formula
     # but routes nothing, so the service points it at ~/.olla/config.yaml, which
     # the user must create first (see caveats). Dir.home resolves to the
     # installing user's home at formula-eval time -- "~" is not expanded inside
-    # the generated launchd plist/systemd unit, so an absolute path is required.
+    # the generated launchd plist, so an absolute path is required.
     # working_dir is the same dir so olla's relative ./logs (it MkdirAll's it)
     # stays under the user's home. It binds to localhost:40114 by default
     # (loopback only); widen it by setting server.host in the config.

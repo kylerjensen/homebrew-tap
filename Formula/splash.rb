@@ -20,7 +20,7 @@ class Splash < Formula
   # commit SHA (not refs/heads/main) to keep the tarball + sha256 reproducible;
   # see CLAUDE.md "Pinning fork commits over tags".
   url "https://github.com/kylerjensen/splash/archive/6fe260c4c86a61ce11a58952e47812caaa40240d.tar.gz"
-  version "1.3.2-dev.1"
+  version "1.3.2-dev.2"
   sha256 "cae31578c5dbd46f5bb8ea2c9a03e8621fb1290d21125ebde5418e0e544a88f9"
   license "Apache-2.0"
 

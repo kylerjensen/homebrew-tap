@@ -33,9 +33,14 @@ class Splash < Formula
   # it: it bundles its own Python (see install).
   depends_on "python@3.13" => :build
   depends_on arch: :arm64
+  # :macos alone keeps Linux from building it (test-bot skips it there);
+  # Homebrew only accepts a minimum macOS version beside it inside on_macos.
   depends_on :macos
-  depends_on macos: :tahoe
   depends_on SplashMacOSRequirement
+
+  on_macos do
+    depends_on macos: :tahoe
+  end
 
   def install
     # Build exactly what an upstream release ships rather than vendoring the

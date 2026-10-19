@@ -96,6 +96,7 @@ Recurring patterns across formulae in this tap:
 - [Formula/icloud-sync.rb](Formula/icloud-sync.rb) — symlinks `$HOME` directories into iCloud Drive; macOS-only, wraps a pre-bundled Node ESM script.
 - [Formula/llama-swap.rb](Formula/llama-swap.rb) — proxy server for swapping models on llama.cpp; prebuilt per-OS/per-arch upstream release binaries, `brew services`-compatible (requires a user-created `~/.llama-swap/config.yaml`). Version-bump cadence below.
 - [Formula/olla.rb](Formula/olla.rb) — proxy and load balancer for self-hosted LLM inference (Ollama, vLLM, llama.cpp, ...); prebuilt per-OS/per-arch upstream release binaries, `brew services`-compatible (reads a user-created `~/.olla/config.yaml`).
+- [Formula/splash.rb](Formula/splash.rb) — local inference engine for Apple silicon (kylerjensen/splash fork, upstream incoai/splash plus JIT mode for serving several models); tracks the fork's `main` via pinned commit SHA with an upstream-base `-dev.N` version. `install` runs upstream's own `make package` (Metal engine + bundled standalone Python), so the keg matches an upstream release; macOS 26.4+ on arm64 only, and it conflicts with `incoai/tap/splash` (both install `splash`).
 - [Casks/omlx-app.rb](Casks/omlx-app.rb) — menu bar app cask for the oMLX LLM inference server; per-OS-version download variants, arm64-only.
 
 `audit_exceptions/flat_namespace_allowlist.json` allowlists formulae for `brew audit`'s flat-namespace check.

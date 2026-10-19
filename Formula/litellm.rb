@@ -26,6 +26,14 @@ class Litellm < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
+    # PR #30's `rebuild 1` was silently ignored (a rebuild bump only takes
+    # effect once the formula is on main), so every CI run in that PR keyed the
+    # bottle at rebuild 0: the first run uploaded that blob (a pre-`litellm
+    # init` build), later runs rebuilt non-reproducibly, pr-upload skipped
+    # "already exists", and bottle --merge kept writing the newest local sha,
+    # leaving main pointing at a checksum GHCR never had. Bumping to 1 now
+    # gives this a fresh key that CI can actually build and upload.
+    rebuild 1
     sha256 cellar: :any, arm64_tahoe: "57053e4cfc4cb2c2c572bafed1522436d45291d204dac0fe7ef92ae4d8caa906"
   end
 

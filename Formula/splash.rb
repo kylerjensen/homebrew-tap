@@ -26,7 +26,7 @@ class Splash < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 arm64_tahoe: "4c718f0399433d523a179bf1b83893d265194462f7b9295df20430dfbacc29d9"
+    sha256 arm64_tahoe: "db8038db5ae5fd9d9dccdbc9735484f51643baded3fa8453b389d3093829ad98"
   end
 
   # The build's own virtualenv needs Python 3.12-3.14; the build sandbox's

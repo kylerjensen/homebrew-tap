@@ -27,8 +27,8 @@ class LlamaSwap < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    rebuild 1
-    sha256 cellar: :any_skip_relocation, arm64_tahoe: "acb2775629e852312ecd34832d05f871ce2d316efacf17e684654bfcefffb3dd"
+    rebuild 2
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "3639889407425660e1a351d944f66d70f615e4e726c4210b2300705c35b87c19"
   end
 
   # macOS only: the tap ships macOS installs by owner decision. llama-swap is

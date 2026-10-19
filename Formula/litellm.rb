@@ -26,7 +26,7 @@ class Litellm < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    sha256 cellar: :any, arm64_tahoe: "6f43f1dac299c1ae63674b6434d53ceb4f275575b5f59bfddb1034a2b95fd902"
+    sha256 cellar: :any, arm64_tahoe: "3f3f07595199c6fd78e0ae471e60b0f4ce7798402d4619a8acfac32e5e748a8d"
   end
 
   # macOS only: this tap ships macOS installs by owner decision. litellm

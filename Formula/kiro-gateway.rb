@@ -13,7 +13,7 @@ class KiroGateway < Formula
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
     rebuild 4
-    sha256 cellar: :any_skip_relocation, arm64_tahoe: "dad1dd479ec68d8ccb85d00ea181fac60c6dcac2fc1982d31d50877e304cc20c"
+    sha256 cellar: :any_skip_relocation, arm64_tahoe: "e8bcffaa9621a4e36319d919b6aee3f1f9b0482315a88774903d008d47438d1e"
   end
 
   # macOS only: the tap ships macOS installs by owner decision. The gateway is

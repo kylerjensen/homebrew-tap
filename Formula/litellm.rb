@@ -26,8 +26,8 @@ class Litellm < Formula
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    rebuild 1
-    sha256 cellar: :any, arm64_tahoe: "7512a51096b6fbda3ca1119cbd623d69e70544e4d91bb679857b1c4dcdade9d7"
+    rebuild 2
+    sha256 cellar: :any, arm64_tahoe: "48605bc27ac7c4c4c929c544b5d6e5346558384d6f5bb6245de41359a60ac21e"
   end
 
   # macOS only: this tap ships macOS installs by owner decision. litellm
@@ -300,5 +300,10 @@ class Litellm < Formula
     # network (falling back to the bundled copy) and caches it under $HOME.
     assert_match version.to_s,
                  shell_output("LITELLM_LOCAL_MODEL_COST_MAP=True #{bin}/litellm --version 2>&1")
+    # The proxy imports prisma at startup whenever DATABASE_URL is set, and
+    # the #33 stale-bottle incident (see the bottle block comment) only
+    # surfaced for end users because no test looked inside the venv.
+    # Importing the package is offline and touches nothing under $HOME.
+    system libexec/"venv/bin/python", "-c", "import prisma"
   end
 end

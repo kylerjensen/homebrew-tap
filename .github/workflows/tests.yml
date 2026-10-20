@@ -317,30 +317,39 @@ jobs:
           git commit -m "Update bottles. [skip ci]"
           echo "committed=true" >> "${GITHUB_OUTPUT}"
 
-      # Push the bottle commit to main over SSH with the bottle-publish deploy
-      # key (secret BOTTLE_DEPLOY_KEY). A write deploy key bypasses the branch
-      # ruleset's required-status-check rule, which is the only way to land a
-      # [skip ci] (check-less) commit on main here: GITHUB_TOKEN is not a
-      # ruleset bypass actor, and a user-owned repo cannot add GitHub Actions as
-      # one (HTTP 422). We switch the tap's origin to the SSH URL just for this
-      # push; merge/upload keep using the HTTPS/GHCR auth setup-homebrew
-      # configured. Only reached on push to main (the commit step is gated
-      # there), so no PR branch ever receives this.
+      # Load the bottle-publish deploy key into an ssh-agent for the push
+      # below. Gated on the commit having happened (push-to-main only), so the
+      # key is never loaded during PR runs. The key is a WRITE deploy key, which
+      # bypasses the branch ruleset's required-status-check rule: that is the
+      # only way to land the check-less "Update bottles." skip-ci commit on
+      # main, since GITHUB_TOKEN is not a ruleset bypass actor and a user-owned
+      # repo cannot add GitHub Actions as one (GitHub returns HTTP 422).
+      - name: Load deploy key
+        if: steps.commit.outputs.committed == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BOTTLE_DEPLOY_KEY }}
+
+      # Push the bottle commit to main over SSH. setup-homebrew configured the
+      # tap's origin for HTTPS; point the push at the SSH URL so the agent's
+      # deploy key authenticates it (merge/upload keep using the HTTPS/GHCR auth
+      # from setup-homebrew). main only advances via this job, so pushing HEAD
+      # directly (no git-try-push rebase) is safe. ssh-agent manages the key but
+      # NOT known_hosts, and the ghcr.io/homebrew/brew container does not
+      # preseed github.com, so pin GitHub's published ed25519 host key (from
+      # https://api.github.com/meta -> ssh_keys) rather than blindly trusting
+      # whatever key the first connection offers.
       - name: Push bottle commit to main
         if: steps.commit.outputs.committed == 'true'
         env:
-          DEPLOY_KEY: ${{ secrets.BOTTLE_DEPLOY_KEY }}
           TAP_DIR: ${{ steps.checkout.outputs.tap_dir }}
         run: |
-          tmp_key="$(mktemp)"
-          printf '%s\n' "${DEPLOY_KEY}" > "${tmp_key}"
-          chmod 600 "${tmp_key}"
-          export GIT_SSH_COMMAND="ssh -i ${tmp_key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           cd "${TAP_DIR}"
-          # git-try-push can't inject a custom SSH command, so push directly;
-          # main only advances via this job, so a race here is not a concern.
           git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
-          rm -f "${tmp_key}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

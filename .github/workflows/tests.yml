@@ -183,21 +183,26 @@ jobs:
   # Flow (order is load-bearing, see below):
   #   1. download all per-runner *.bottle.json into one dir
   #   2. `brew bottle --merge --write --no-commit` rewrites the .rb sha256
-  #   3. if the .rb changed, commit it back to the branch (PR) or main (push)
+  #   3. if the .rb changed, commit "Update bottles." and push it (over SSH
+  #      with the bottle-publish deploy key) back to the branch CI is on
   #   4. `brew pr-upload --upload-only` pushes the blobs to GHCR
   #
-  # Merge -> commit -> upload is required: `brew pr-upload`'s
-  # check_transition_bottles! re-reads the committed .rb and fails if its
-  # bottle metadata doesn't match the uploaded blobs.
+  # Merge -> commit -> push -> upload is required: `brew pr-upload`'s
+  # check_transition_bottles! re-reads the merged .rb from the working tree and
+  # fails if its bottle metadata doesn't match the uploaded blobs.
   #
-  # The commit in step 3 carries [skip ci], so GitHub starts no workflow run
-  # for it -- this both avoids an infinite loop and means the committed bottle
-  # isn't independently re-verified (it was already install-tested by test-bot
-  # in the build job that produced it). Pushing with GITHUB_TOKEN alone no
-  # longer does this: since June 2026 a github-actions[bot] push to a PR
-  # starts a pull_request run that waits for a maintainer's approval. When a
-  # bottle is already current (e.g. a docs-only push to main), step 2 produces
-  # no diff and the job is a no-op.
+  # The commit has NO [skip ci] marker (deliberately). It is pushed as the
+  # bottle-publish deploy key, not github-actions[bot], so the pull_request run
+  # it triggers is not approval-gated (the June 2026 gate is bot-specific). That
+  # run finds the bottle already on GHCR, skips the build (so no artifact), so
+  # the merge step finds no *.bottle.json and commits nothing: the loop
+  # terminates in one extra no-op run, and the PR tip ends up with real green
+  # checks the ruleset can require. The marker would instead leave the tip with
+  # no run at all, which blocked merges (see CLAUDE.md). On push to main the same
+  # deploy key also bypasses the required-status-check rule, which GITHUB_TOKEN
+  # cannot (a user-owned repo can't add GitHub Actions as a bypass actor). When
+  # a bottle is already current (e.g. a docs-only push), step 2 produces no diff
+  # and the job is a no-op.
   publish-bottles:
     needs: test-bot
     runs-on: ubuntu-latest
@@ -282,10 +287,16 @@ jobs:
           brew bottle --merge --write --no-commit "${abs_jsons[@]}"
           echo "changed=true" >> "${GITHUB_OUTPUT}"
 
-      # Commit the refreshed bottle block in the tapped checkout. No push here;
-      # git-try-push below does the race-safe push (rebasing on origin drift).
-      # [skip ci] keeps GitHub from starting a run for the commit, which would
-      # wait for approval as a github-actions[bot] push (see above).
+      # Commit the refreshed bottle block back to the branch CI is on (the PR
+      # branch on a PR, main on a push). No skip-ci marker: the push below goes
+      # out as the bottle-publish deploy key, not the Actions bot, so it starts
+      # a normal pull_request run that is NOT approval-gated (the June 2026
+      # approval gate is specific to github-actions[bot] pushes). That run finds
+      # the bottle already on GHCR, skips the build, and finds no bottle diff to
+      # commit, so it terminates without a further commit (no loop) while giving
+      # the PR tip real, green checks, which is what the required-check ruleset
+      # needs. This is why the marker, and the whole post-merge deferral it
+      # forced, are no longer needed.
       - name: Commit refreshed bottle block
         if: steps.guard.outputs.skip == 'false' && steps.merge.outputs.changed == 'true'
         id: commit
@@ -302,21 +313,41 @@ jobs:
           git config user.name "${GIT_NAME}"
           git config user.email "${GIT_EMAIL}"
           git add Formula Casks
-          git commit -m "Update bottles. [skip ci]"
+          git commit -m "Update bottles."
           echo "committed=true" >> "${GITHUB_OUTPUT}"
 
-      # Do NOT pass `token:` here. setup-homebrew already configured a
-      # http.extraheader Authorization credential on the tap repo for the whole
-      # job; git-try-push's own `token:` input adds a SECOND extraheader, and
-      # GitHub rejects the push with `remote: Duplicate header: "Authorization"`
-      # (HTTP 400). Relying on the inherited credential pushes cleanly.
+      # Load the bottle-publish deploy key into an ssh-agent for the push below.
+      # Pushing as the deploy key (not GITHUB_TOKEN) does two things: it bypasses
+      # the branch ruleset's required-status-check rule (needed when the target
+      # is main; GITHUB_TOKEN is not a bypass actor and a user-owned repo cannot
+      # add GitHub Actions as one, HTTP 422), and it keeps the resulting
+      # pull_request run from being approval-gated.
+      - name: Load deploy key
+        if: steps.commit.outputs.committed == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BOTTLE_DEPLOY_KEY }}
+
+      # Push the bottle commit over SSH to the ref CI is on. setup-homebrew
+      # configured the tap's origin for HTTPS; point the push at the SSH URL so
+      # the agent's deploy key authenticates it (merge/upload keep using the
+      # HTTPS/GHCR auth from setup-homebrew). ssh-agent manages the key but NOT
+      # known_hosts, and the ghcr.io/homebrew/brew container does not preseed
+      # github.com, so pin GitHub's published ed25519 host key (from
+      # https://api.github.com/meta -> ssh_keys) rather than blindly trusting
+      # whatever key the first connection offers.
       - name: Push bottle commit
         if: steps.commit.outputs.committed == 'true'
-        uses: Homebrew/actions/git-try-push@main
-        with:
-          directory: ${{ steps.checkout.outputs.tap_dir }}
-          branch: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          tries: "3"
+        env:
+          TAP_DIR: ${{ steps.checkout.outputs.tap_dir }}
+          TARGET_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          cd "${TAP_DIR}"
+          git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

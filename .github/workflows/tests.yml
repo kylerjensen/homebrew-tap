@@ -282,12 +282,24 @@ jobs:
           brew bottle --merge --write --no-commit "${abs_jsons[@]}"
           echo "changed=true" >> "${GITHUB_OUTPUT}"
 
-      # Commit the refreshed bottle block in the tapped checkout. No push here;
-      # git-try-push below does the race-safe push (rebasing on origin drift).
-      # [skip ci] keeps GitHub from starting a run for the commit, which would
-      # wait for approval as a github-actions[bot] push (see above).
+      # Commit the refreshed bottle block, but ONLY on push to main (never on a
+      # PR). On a PR the merge + upload steps still run (so publish-bottles
+      # genuinely verifies the bottle and pushes the blobs to GHCR), we just
+      # don't write the sha256 back to the PR branch: a bot commit on the PR
+      # tip carries [skip ci], gets no check run, and can never satisfy the
+      # required-check ruleset, which blocked every bottle PR until a human
+      # pushed an empty re-trigger commit. Deferring the commit to the
+      # post-merge push-to-main run keeps the PR tip on the author's own commit
+      # (which has real runs) and lands the bottle commit on main instead, where
+      # no PR gate applies. [skip ci] still stops that commit from starting a
+      # run (no build loop). The push step below uses a write deploy key to get
+      # past the required-status-check rule on main (GitHub refuses to add its
+      # Actions app as a ruleset bypass actor on a user-owned repo).
       - name: Commit refreshed bottle block
-        if: steps.guard.outputs.skip == 'false' && steps.merge.outputs.changed == 'true'
+        if: >-
+          github.event_name == 'push'
+          && steps.guard.outputs.skip == 'false'
+          && steps.merge.outputs.changed == 'true'
         id: commit
         env:
           GIT_NAME: ${{ steps.git_setup.outputs.name }}
@@ -305,18 +317,30 @@ jobs:
           git commit -m "Update bottles. [skip ci]"
           echo "committed=true" >> "${GITHUB_OUTPUT}"
 
-      # Do NOT pass `token:` here. setup-homebrew already configured a
-      # http.extraheader Authorization credential on the tap repo for the whole
-      # job; git-try-push's own `token:` input adds a SECOND extraheader, and
-      # GitHub rejects the push with `remote: Duplicate header: "Authorization"`
-      # (HTTP 400). Relying on the inherited credential pushes cleanly.
-      - name: Push bottle commit
+      # Push the bottle commit to main over SSH with the bottle-publish deploy
+      # key (secret BOTTLE_DEPLOY_KEY). A write deploy key bypasses the branch
+      # ruleset's required-status-check rule, which is the only way to land a
+      # [skip ci] (check-less) commit on main here: GITHUB_TOKEN is not a
+      # ruleset bypass actor, and a user-owned repo cannot add GitHub Actions as
+      # one (HTTP 422). We switch the tap's origin to the SSH URL just for this
+      # push; merge/upload keep using the HTTPS/GHCR auth setup-homebrew
+      # configured. Only reached on push to main (the commit step is gated
+      # there), so no PR branch ever receives this.
+      - name: Push bottle commit to main
         if: steps.commit.outputs.committed == 'true'
-        uses: Homebrew/actions/git-try-push@main
-        with:
-          directory: ${{ steps.checkout.outputs.tap_dir }}
-          branch: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          tries: "3"
+        env:
+          DEPLOY_KEY: ${{ secrets.BOTTLE_DEPLOY_KEY }}
+          TAP_DIR: ${{ steps.checkout.outputs.tap_dir }}
+        run: |
+          tmp_key="$(mktemp)"
+          printf '%s\n' "${DEPLOY_KEY}" > "${tmp_key}"
+          chmod 600 "${tmp_key}"
+          export GIT_SSH_COMMAND="ssh -i ${tmp_key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          cd "${TAP_DIR}"
+          # git-try-push can't inject a custom SSH command, so push directly;
+          # main only advances via this job, so a race here is not a concern.
+          git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
+          rm -f "${tmp_key}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

@@ -335,7 +335,14 @@ jobs:
       # known_hosts, and the ghcr.io/homebrew/brew container does not preseed
       # github.com, so pin GitHub's published ed25519 host key (from
       # https://api.github.com/meta -> ssh_keys) rather than blindly trusting
-      # whatever key the first connection offers.
+      # whatever key the first connection offers. We pin only the ed25519 key
+      # and force the connection to negotiate that algorithm with
+      # HostKeyAlgorithms=ssh-ed25519: OpenSSH otherwise picks a host-key type
+      # by its own default ordering, and if it settles on rsa/ecdsa (which this
+      # container's defaults can), it checks the server key against a known_hosts
+      # entry we never wrote and aborts with "Host key verification failed" even
+      # though the server is genuine. Pinning one algorithm and forcing it keeps
+      # the single pinned line authoritative.
       - name: Push bottle commit
         if: steps.commit.outputs.committed == 'true'
         env:
@@ -347,7 +354,8 @@ jobs:
           echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
           cd "${TAP_DIR}"
-          git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
+          GIT_SSH_COMMAND="ssh -o HostKeyAlgorithms=ssh-ed25519" \
+            git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

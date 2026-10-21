@@ -363,6 +363,14 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
           cd "${TAP_DIR}"
+          echo "::group::ssh/git diagnostics"
+          echo "HOME=$HOME"; echo "whoami=$(whoami)"
+          echo "--- ~/.ssh/config ---"; cat ~/.ssh/config || true
+          echo "--- ~/.ssh/known_hosts ---"; cat ~/.ssh/known_hosts || true
+          echo "--- git insteadOf config ---"; git config --get-regexp 'url\..*insteadof' || true
+          echo "--- ssh -G for target ---"; ssh -G git@github.com 2>&1 | grep -iE '^hostname|^hostkeyalias|^identityfile|^user ' || true
+          echo "--- ssh -vT probe ---"; GIT_SSH_COMMAND="ssh -v" ssh -vT git@github.com 2>&1 | grep -iE 'Connecting|Host key|known_hosts|Server host key|Offering|Authenticated|debug1: Reading configuration|checking the list' | head -40 || true
+          echo "::endgroup::"
           git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to

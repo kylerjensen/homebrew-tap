@@ -335,14 +335,17 @@ jobs:
       # known_hosts, and the ghcr.io/homebrew/brew container does not preseed
       # github.com, so pin GitHub's published ed25519 host key (from
       # https://api.github.com/meta -> ssh_keys) rather than blindly trusting
-      # whatever key the first connection offers. We pin only the ed25519 key
-      # and force the connection to negotiate that algorithm with
-      # HostKeyAlgorithms=ssh-ed25519: OpenSSH otherwise picks a host-key type
-      # by its own default ordering, and if it settles on rsa/ecdsa (which this
-      # container's defaults can), it checks the server key against a known_hosts
-      # entry we never wrote and aborts with "Host key verification failed" even
-      # though the server is genuine. Pinning one algorithm and forcing it keeps
-      # the single pinned line authoritative.
+      # whatever key the first connection offers.
+      #
+      # webfactory/ssh-agent, when the loaded key is a GitHub *deploy* key,
+      # rewrites git URLs with `insteadOf` so `git@github.com:owner/repo` maps
+      # to a per-key alias host `key-<sha256>.github.com` (HostName github.com)
+      # in ~/.ssh/config. SSH then verifies the server key against the alias
+      # name, not `github.com`, so a known_hosts entry for `github.com` alone
+      # never matches and the push dies with "Host key verification failed".
+      # Add an ssh_config block for that alias pattern with `HostKeyAlias
+      # github.com` so the lookup resolves to the single github.com key we pin,
+      # whatever hash the action chose.
       - name: Push bottle commit
         if: steps.commit.outputs.committed == 'true'
         env:
@@ -353,9 +356,14 @@ jobs:
           chmod 700 ~/.ssh
           echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'EOF'
+          Host key-*.github.com
+            HostName github.com
+            HostKeyAlias github.com
+          EOF
+          chmod 600 ~/.ssh/config
           cd "${TAP_DIR}"
-          GIT_SSH_COMMAND="ssh -o HostKeyAlgorithms=ssh-ed25519" \
-            git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
+          git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

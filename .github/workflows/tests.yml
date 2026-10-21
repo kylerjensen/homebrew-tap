@@ -336,18 +336,29 @@ jobs:
       # github.com, so pin GitHub's published ed25519 host key (from
       # https://api.github.com/meta -> ssh_keys) rather than blindly trusting
       # whatever key the first connection offers.
+      #
+      # The pin must be handed to ssh with an explicit, absolute
+      # UserKnownHostsFile. The runner starts this container with
+      # HOME=/github/home, but steps run as the image's `linuxbrew` user, whose
+      # passwd home is /home/linuxbrew. Bash expands `~` from $HOME, while
+      # OpenSSH resolves ~/.ssh from the passwd entry and ignores $HOME, so a
+      # pin written to ~/.ssh/known_hosts lands where ssh never looks and the
+      # push fails with "Host key verification failed". A command-line `-o`
+      # overrides that lookup and keeps strict checking on.
       - name: Push bottle commit
         if: steps.commit.outputs.committed == 'true'
         env:
           TAP_DIR: ${{ steps.checkout.outputs.tap_dir }}
           TARGET_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          known_hosts="${HOME}/.ssh/known_hosts"
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "${known_hosts}"
+          chmod 600 "${known_hosts}"
           cd "${TAP_DIR}"
-          git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
+          GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=${known_hosts} -o StrictHostKeyChecking=yes" \
+            git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:${TARGET_REF}"
 
       # pr-upload globs *.bottle.json in the cwd and pushes the OCI blobs to
       # GHCR; it reads the merged bottle metadata from the tapped formula, so

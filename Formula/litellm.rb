@@ -19,15 +19,14 @@ class Litellm < Formula
   # `brew style` requires `url` before `version`, and the interpolation would
   # be empty at that point; the `on_intel` override below (evaluated after the
   # `version` line) does interpolate.
-  url "https://files.pythonhosted.org/packages/40/3b/a060486a4cb637d2aff7bedd2d9bdd807793cf8820153bca74fd14d7cbd4/litellm-1.105.1-cp310-abi3-macosx_11_0_arm64.whl", using: :nounzip
-  version "1.105.1"
-  sha256 "3253da7d4967e367fb7e4e404b598a26037c45ba6d67a79356a81d3f8b9f9f3a"
+  url "https://files.pythonhosted.org/packages/51/fc/15e44b2a222dfda71e0aff107fccfb49b06a4695fae0eb6867aff84f7e1d/litellm-1.106.2-cp310-abi3-macosx_11_0_arm64.whl", using: :nounzip
+  version "1.106.2"
+  sha256 "cc778d01ed65a8dd57d5211d581ec237e06df239a09c3d573ace33e0feea76c9"
   license "MIT"
 
   bottle do
     root_url "https://ghcr.io/v2/kylerjensen/tap"
-    rebuild 2
-    sha256 cellar: :any, arm64_tahoe: "48605bc27ac7c4c4c929c544b5d6e5346558384d6f5bb6245de41359a60ac21e"
+    sha256 cellar: :any, arm64_tahoe: "c2b92220dc083f2212693f295efafeda984627f7897fe014f9ba63e0e6c175a6"
   end
 
   # macOS only: this tap ships macOS installs by owner decision. litellm
@@ -45,8 +44,8 @@ class Litellm < Formula
   # `brew readall`'s Linux simulation (see the comment above).
   on_macos do
     on_intel do
-      url "https://files.pythonhosted.org/packages/d7/71/72b0e4c54a8fb0e10a35adb611f2f03febc27ac4fdf9b372c4f4a7d53442/litellm-#{version}-cp310-abi3-macosx_10_12_x86_64.whl", using: :nounzip
-      sha256 "633886584ffb6421485349376f2c1666d4854fecc3ab8b1cdb24537817d4e1cc"
+      url "https://files.pythonhosted.org/packages/0f/47/1038af80d9831972fae8712a890c30252f51c514c092d83e0f1330bb1fa1/litellm-#{version}-cp310-abi3-macosx_10_12_x86_64.whl", using: :nounzip
+      sha256 "bf6f13445bb59d8d02131bbc1fb57161d1ae629bec65dc66f9add4c09fb6994a"
     end
   end
 

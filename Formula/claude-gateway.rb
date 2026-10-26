@@ -2,7 +2,6 @@ class ClaudeGateway < Formula
   desc "Anthropic Messages gateway that routes by model to local and remote backends"
   homepage "https://github.com/kylerjensen/claude-gateway"
   url "https://github.com/kylerjensen/homebrew-tap/releases/download/claude-gateway-0.1.0.3/claude-gateway"
-  version "0.1.0.3"
 
   # The repository has no LICENSE file yet, so there is nothing truthful to
   # declare here. Resolve by adding one upstream rather than by asserting a
@@ -14,14 +13,15 @@ class ClaudeGateway < Formula
     root_url "https://ghcr.io/v2/kylerjensen/tap"
   end
 
-  # url, version and sha256 above are rewritten by the gateway's publish-formula
-  # workflow on every merge to its main. The gateway source is private, so the
-  # workflow builds the binary there and uploads it as a release asset on this
-  # (public) tap repo; url points at that asset, version is `<base>.<commit-count>`,
-  # and the binary is a single self-contained file (bun compile). The project ships
-  # no git tags or GitHub releases of its own. Homebrew keys a bottle by version and
-  # rebuild, never by the asset SHA, so the per-commit version keeps bottles distinct
-  # (see CLAUDE.md).
+  # url and sha256 above are rewritten by the gateway's publish-formula workflow on
+  # every merge to its main. The gateway source is private, so the workflow builds
+  # the binary there and uploads it as a release asset on this (public) tap repo; url
+  # points at that asset and the binary is a single self-contained file (bun compile).
+  # There is no `version` line on purpose: the version (`<base>.<commit-count>`) is in
+  # the URL's `claude-gateway-<version>/` segment and Homebrew scans it from there, so
+  # a declared `version` would trip `brew audit`'s redundant-version check (the olla
+  # formula does the same). Homebrew keys a bottle by version and rebuild, never by the
+  # asset SHA, so the per-commit version keeps bottles distinct (see CLAUDE.md).
 
   depends_on :macos
 
